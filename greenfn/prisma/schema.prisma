@@ -1,0 +1,288 @@
+// This is your Prisma schema file,
+// learn more about it in the docs: https://pris.ly/d/prisma-schema
+
+// Looking for ways to speed up your queries, or scale easily with your serverless or edge functions?
+// Try Prisma Accelerate: https://pris.ly/cli/accelerate-init
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+model User {
+  id     String  @id @default(cuid())
+  emaill String  @unique
+  name   String?
+
+  contacts  Contact[]
+  stages    PipelineStage[]
+  tags      Tag[]
+  templates MessageTemplate[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model Contact {
+  id        String @id @default(cuid())
+  advisorId String
+  advisor   User   @relation(fields: [advisorId], references: [id])
+
+  type ContactType @default(LEAD)
+
+  stageId String?
+  stage   PipelineStage? @relation(fields: [stageId], references: [id])
+
+  fullName String
+  phone    String?
+  email    String?
+
+  source String?
+
+  birthday DateTime?
+
+  isStarred Boolean @default(false)
+
+  notes String?
+
+  interactions  Interaction[]
+  nextSteps     NextStep[]
+  conversations Conversation[]
+  policies      Policy[]
+  goals         Goal[]
+
+  tags ContactTag[]
+
+  channels ContactChannel[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([advisorId])
+  @@index([stageId])
+  @@index([type])
+  @@index([isStarred])
+}
+
+model PipelineStage {
+  id        String @id @default(cuid())
+  advisorId String
+  advisor   User   @relation(fields: [advisorId], references: [id])
+
+  name  String
+  order Int
+
+  contacts Contact[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([advisorId, order])
+  @@unique([advisorId, name])
+  @@index([advisorId])
+}
+
+model Interaction {
+  id        String  @id @default(cuid())
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  type       InteractionType
+  occurredAt DateTime        @default(now())
+
+  notes String?
+
+  aiSummary String?
+
+  createdAt DateTime @default(now())
+
+  @@index([contactId, occurredAt])
+}
+
+model NextStep {
+  id        String  @id @default(cuid())
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  title       String
+  description String
+  dueAt       DateTime?
+  status      TaskStatus @default(OPEN)
+
+  conversationId String?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id], onDelete: SetNull)
+
+  messageDraft MessageDraft?
+
+  completedAt DateTime?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contactId])
+  @@index([status, dueAt])
+  @@index([conversationId])
+}
+
+model Conversation {
+  id        String  @id @default(cuid())
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  channel MessagingChannel
+
+  state ConversationState @default(AWAITING_RESPONSE)
+
+  lastTopic      String?
+  lastOutboundAt DateTime?
+  lastInboundAt  DateTime?
+
+  nextSteps NextStep[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contactId])
+  @@index([state])
+}
+
+model MessageDraft {
+  id         String   @id @default(cuid())
+  nextStepId String   @unique
+  nextStep   NextStep @relation(fields: [nextStepId], references: [id], onDelete: Cascade)
+
+  templateId String?
+  template   MessageTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  draftText String
+  finalText String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+model MessageTemplate {
+  id        String @id @default(cuid())
+  advisorId String
+  advisor   User   @relation(fields: [advisorId], references: [id])
+
+  name    String
+  channel MessagingChannel?
+  content String
+
+  drafts MessageDraft[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([advisorId, name])
+  @@index([advisorId])
+}
+
+model Policy {
+  id        String  @id @default(cuid())
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  provider   String?
+  policyType String?
+  details    String?
+  startDate  DateTime?
+  endDate    DateTime?
+
+  summaryPdfUrl String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contactId])
+}
+
+model Goal {
+  id        String  @id @default(cuid())
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  title      String
+  targetDate DateTime?
+  notes      String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([contactId])
+}
+
+model Tag {
+  id        String @id @default(cuid())
+  advisorId String
+  advisor   User   @relation(fields: [advisorId], references: [id])
+
+  name     String
+  contacts ContactTag[]
+
+  @@unique([advisorId, name])
+  @@index([advisorId])
+}
+
+model ContactTag {
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  tagId String
+  tag   Tag    @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, tagId])
+  @@index([tagId])
+}
+
+model ContactChannel {
+  id        String  @id @default(cuid())
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  channel MessagingChannel
+  handle  String
+
+  @@unique([contactId, channel])
+  @@index([contactId])
+}
+
+enum ContactType {
+  LEAD
+  CLIENT
+}
+
+enum InteractionType {
+  CALL
+  MEETING
+  WHATSAPP
+  TELEGRAM
+  INSTAGRAM
+  EMAIL
+  NOTE
+}
+
+enum TaskStatus {
+  OPEN
+  DONE
+  CANCELED
+}
+
+enum MessagingChannel {
+  WHATSAPP
+  TELEGRAM
+  INSTAGRAM
+  EMAIL
+}
+
+enum ConversationState {
+  AWAITING_RESPONSE
+  IN_PROGRESS
+  RESPONSE_RECEIVED_ACTION_REQUIRED
+  CLOSED
+}
