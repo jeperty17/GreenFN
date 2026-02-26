@@ -15,7 +15,7 @@ datasource db {
 
 model User {
   id     String  @id @default(cuid())
-  emaill String  @unique
+  email String  @unique
   name   String?
 
   contacts  Contact[]
