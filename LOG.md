@@ -115,3 +115,11 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-03-03 21:05:10 +08
 - FILES_CHANGED: LOG.md
 - CHANGE_SUMMARY: Repaired log structure drift by restoring one-entry-per-heading integrity (`LOG-0001` through `LOG-0008`) and added explicit ordering/validation checklist rules to prevent future mis-grouped or orphaned log fields.
+
+### LOG-0010
+
+- TASK: Agent Governance
+- SUBTASK: Add persistent Copilot methodology instructions for future sessions
+- COMPLETED_AT: 2026-03-03 21:17:02 +08
+- FILES_CHANGED: .github/copilot-instructions.md, docs/agent-methodology.md, LOG.md
+- CHANGE_SUMMARY: Added repository-level Copilot operating contract and reusable methodology/templates documentation so future instances consistently follow startup reads, stepwise confirmation flow, logging/review updates, and branch-awareness rules.
