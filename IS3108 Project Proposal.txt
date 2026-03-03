@@ -1,0 +1,232 @@
+﻿Big Idea
+An AI-powered second brain for financial advisors that keeps every lead, client, interaction, and next step organised in one place – so advisors always know who to follow up with, what was last discussed, and what needs to happen next.
+In practice, many financial advisors still rely on fragmented and outdated methods such as spreadsheets, notebooks, or manually scrolling through messaging apps to track their clients and leads. Yet advisors operate as solo entrepreneurs, where organisation and consistent follow-ups directly affect earning outcomes. The lack of a structured system creates unnecessary friction and increases the risk of missed actions or forgotten conversations.
+Our project addresses that problem by providing a single, structured workspace that mirrors an advisor’s ideal workflow. Clients and leads move through a visual pipeline that reflects their progress over time. Interactions with each client/lead are logged in a chronological history, to help advisors quickly recall prior discussions without rereading/recalling long or scattered conversations. Each client is also tied to clear next steps with set due dates, functioning as a to-do item that is scheduled in the near future or far ahead. These next steps collectively form a dynamic “Today” view that automatically surfaces overdue and upcoming actions, removing guesswork from daily task planning. By making client and lead management more efficient and frictionless, the system reduces administrative effort and allows advisors to spend more time on higher-value activities such as meeting clients and closing sales.
+Tech Stack
+I think we should use React and Express.js combo cause we are doing classic web app with CRUD, auth, dashboards and integrations. Besides, it matches what we are learning in class and apparently it is better if our AI-features are mostly API-driven (ie the interaction summaries, next-steps, follow-up suggestions). Chat say Next.js has a steeper learning curve if no one has used it, harder to debug when we are learning React fundamentals.
+Frontend:
+* React (with Vite)
+* ShadCN + Tailwind for UI
+   * Tailwind is a different CSS framework from Bootstrap, more customisable than Bootstrap
+Backend:
+* Node.js + Express.js
+Database:
+* PostgreSQL via Supabase
+   * Supabase also gives authentication features
+* Prisma for ORM
+Deployment:
+* Vercel for frontend
+* Render/Railway for backend
+Core Features
+Contacts Hub [Consolidated Data of all potential/active customers]
+Description:
+A central list of everyone the FA is handling, including new leads, warm prospects, and existing clients.
+
+
+Why?
+The FA finally has one clean, organised interface for all leads and clients instead of juggling multiple platforms such as WhatsApp, Telegram, Instagram etc from memory.
+
+
+What?
+* [DATA] Client key info:
+   * Name
+   * Contact details (phone, email)
+   * Whether they are a Lead or Client
+   * Where they came from (IG, referral, roadshow, etc.)
+   * Birthday (as additional next action suggestion)
+   * existing portfolio/policies
+      * Means long setup time, but can make this optional to use
+      * Input existing portfolios by filling up a form with relevant details and manually build out a client’s entire portfolio
+         * Extension: Collate all policy information and generate into a policy summary PDF for FA to easily disseminate to clients
+[a][b]
+   * current priorities/life goals for touchpoint
+      * Eg getting a BTO by XXX, marry by XXX, retire by XXX
+         * manual input, can extend to AI scraping/searching for the info from long conversation transcripts/from generated summaries
+
+
+* [ACTIONS] Allow simple search and filtering:
+   * Find a specific person quickly
+   * filter only leads / only clients
+   * filter people from a specific source
+   * allow for creation of tags to group different contacts together
+      * subset: “star” certain contacts as people to focus on 
+Leads Pipeline [Moveable Cards]
+Description:
+A visual leads board that shows where each person is in the FA’s pipeline.
+Why?
+The FA can see their business at a glance. From the journey, we can see who is stuck, who is moving, and where attention is needed. 
+What?
+* [VISUALS] Show the journey as clear columns/statuses (for example):
+   * New → Contacted → Booked → No-show → In Progress → Closed (Won) / Closed (Lost)
+* Each person appears as a card in the appropriate column.
+* [ACTIONS] The FA can drag and drop leads between statuses as leads progress.
+To Do List [Urgent Action]
+Description:
+A simple way to decide and remember what needs to happen next for each person/lead, and a daily list that shows who to focus on.
+Why?
+Every person has a clear “next move”. The FA always knows who to work on today based on urgency, instead of relying on memory, random scrolling, or scattered notes.
+What?
+* [VISUAL] There is a “Today” view that shows:
+   * Everyone whose next step is due today.
+   * Everyone whose next step is overdue.
+
+
+* [ACTION] For each person, the FA can set:
+   * A short next step (e.g. “Send follow-up message”, “Confirm appointment”, “Check in after payday”, “Wish happy birthday”).
+   * A date for that next step.
+* Optional light nudge:
+   * After moving a lead on the pipeline, the app can remind the FA to set a next step OR to update interaction history (see feature 4).
+Additional Suggestions:
+
+
+Assisted Messaging for Next Steps[c]
+* When a message-related task is due, use AI to generate a message draft using contact, pipeline stage, and recent interaction data
+* Users can review and edit the draft before sending
+* GreenFN then opens the relevant external messaging platform (e.g. WhatsApp, Telegram) with the message pre-filled or ready to paste, user will then make the final send
+* Also allow for users to create/modify their own reusable message templates for common scenarios (e.g. follow-ups, reminders, post-meeting messages), with simple placeholders that are automatically filled based on context and can optionally be refined using AI.
+* This approach improves execution speed while deliberately avoiding full message automation and its associated legal, privacy, and platform-policy risks.
+
+
+Conversation State Tracking (Response Accountability)[d]
+* Outbound messages are treated as open communication loops rather than one-off actions.
+* Each conversation can exist in one of four explicit states:
+   * Awaiting response
+   * Conversation in progress
+   * Response received (action required)
+   * Closed / no response expected
+* Use these states to systematically track follow-up obligations without importing chat history or detecting inbound messages
+* Unresolved conversation loops are surfaced alongside other due tasks/next steps in the Today view, ensuring accountability while relying on external messaging platforms for real-time notifications.
+
+
+Interaction History [Personal, compared to Leads Pipeline feature]
+Description:
+A simple timeline for each person, showing what has happened with them over time.
+Why?
+Before contacting someone again, the FA can quickly scroll their history and remember what was shared, what was promised, and what’s important to that person.
+What?
+* [DATA] Each log entry has:
+   * Interaction type
+   * Date
+   * Free-form notes (or AI summary, see next feature)
+
+
+* [ACTIONS] For each person, the FA can log interactions such as:
+   * Calls
+   * Zoom/face-to-face meetings
+   * WhatsApp/DM conversations
+   * General notes
+AI Interaction History/Summaries [Personal]
+Description:
+An AI-powered helper that turns each interaction into a concise but detailed summary, based on a short guided questionnaire.
+Why?
+Before the next call, the FA can skim a few summaries and instantly remember the full picture. Reduces mental load and makes every follow-up feel more personal and professional.
+What?
+* [ACTION] After a call/meeting/chat, instead of writing a long messy note, the FA:
+   * Fills in a short, structured form about the interaction, e.g.:
+      * What was the purpose of this interaction?
+      * What did the client share about their situation?
+      * What needs or problems came up?
+      * What options/solutions were discussed?
+      * What was decided (if anything)?
+      * What are the next steps?
+Alternative: AI-Assisted Conversation Summaries[e]
+* After a conversation or appointment is completed, GreenFN prompts users to optionally capture key takeaways as part of the natural post-conversation workflow.
+* Users may either:
+   * paste existing AI-generated summaries from online meetings (e.g. Zoom, Google Meet), or
+   * provide brief, unstructured notes for conversations without recordings, or
+   * Copy-paste conversation history/messages from messaging apps
+* AI is used to compress and standardise the input into a concise interaction summary that preserves key context for future recall.
+* The prompt is lightweight and fully skippable, ensuring minimal disruption while supporting long-term memory and better context for subsequent actions.
+* The app uses AI to turn those answers into a clean, concise written summary that:
+   * Describes who this person is,
+   * Highlights their key goals, concerns and context,
+   * Recaps what was discussed,
+   * Restates any decisions and agreed next steps.
+Simple Pipeline Insights [Client Level] (exclude)[f]
+Description:
+Lightweight statistics that show how the pipeline is performing.
+Why?
+Gives the FA an overview, and whether their follow-up system is actually working.
+What?
+* [VISUALS] Show basic numbers such as:
+   * How many people are in each stage (New, Contacted, Booked, etc.).
+   * Simple conversion rates between key stages (e.g. New → Contacted, Contacted → Booked).
+   * Optional: A simple breakdown by source (IG vs referrals vs lead magnet), once there’s enough data.
+
+
+Timeline
+Week 4: 
+* Finish up ORM, can use Prisma AI for help. 
+* Finish up wireframes/mockup
+
+
+Week 5: 
+* Start/Finish coding the landing/contacts hub page
+
+
+Week 6:
+* Start/Finish coding the leads pipeline page
+
+
+Week 7:
+* Start/Finish coding the planner/”Today” Focus List page
+
+
+Week 8: 
+* Start/Finish coding the interaction history/insights page
+
+
+Week 9-10: 
+* Start/Finish coding the AI-summary page
+
+
+Week 11-12:
+* Buffer weeks to finish up anything that is not done yet
+* Start preparing for the presentation in Week 13
+
+
+Week 12-13: 
+* Rehearse presentation
+
+
+Mockup
+Landing Page/Contacts Hub
+  
+
+
+
+Leads Pipeline Page
+  
+
+
+
+To-do List/Today’s Page
+  
+
+
+
+Interaction History Page
+  
+
+  
+
+
+
+AI Summary Page
+  
+
+[a]what is the purpose of this
+[b]specific to FA, need to mine for info based on historical policies subscribed by client. purpose of this function is to automate this scraping of information.
+[c]prof's suggestion was to integrate the tasks with existing messaging platforms but that means we need to have access to the respective platforms' API which is not easy. eg whatsapp will need whatsapp business acct (then every user needs to register for it), linkedin's TOC doesnt allow for automated messaging (tho some platforms do exist) -> just some examples
+
+
+so i dont think its the best. naturally then to make it easier, stuff like pre-fill the msg then ask the user to click send on their own is actl abit easier. but ofc it wont be as automated but we also allow for messaging templates and also AI drafted messaging (tho i doubt AI will be able to text that well) are some options we can consider to make the job of carrying out their tasks alot simpler
+[d]this is for the notification feature prof mentioned. since its hard to integrate w existing messaging platforms, notifications to alert the user that they got a reply etc is not very possible, also they shld hv their phone notif anw.
+
+
+so i thot of this idea when once the user says they did their next step, then we keep prompting them everyday to update how the convo is going (alongside the tasks they hv to do that day). that way its like a reminder to them to check and update progress of their convo, and also prompts them to continue keeping log of their convo diligently and they wont neglect using our app over time
+[e]we can either go w this or do the voice recording thing, i think im ok w either but my concern is that if clients arent comfortable w being recorded, the feature will largely go unused
+
+
+i think if we just allow the FA to quickly brain dump what occurred during the appt/meeting (and try to speed this process up by prompting them in the 'Today' view like how we prompt them to work on their daily tasks) we shld be able to get them to brain dump when their memory is freshest
+[f]exclude based on what prof suggested
