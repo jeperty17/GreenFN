@@ -123,3 +123,11 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-03-03 21:17:02 +08
 - FILES_CHANGED: .github/copilot-instructions.md, docs/agent-methodology.md, LOG.md
 - CHANGE_SUMMARY: Added repository-level Copilot operating contract and reusable methodology/templates documentation so future instances consistently follow startup reads, stepwise confirmation flow, logging/review updates, and branch-awareness rules.
+
+### LOG-0011
+
+- TASK: Node.js + Express.js Setup
+- SUBTASK: Structured backend scaffold, middleware, module boundaries, and write-endpoint validation
+- COMPLETED_AT: 2026-03-05 00:35:12 +08
+- FILES_CHANGED: greenfn/index.js, greenfn/package.json, greenfn/package-lock.json, greenfn/src/app.js, greenfn/src/server.js, greenfn/src/config/env.js, greenfn/src/utils/httpError.js, greenfn/src/middleware/requestLogger.js, greenfn/src/middleware/notFound.js, greenfn/src/middleware/errorHandler.js, greenfn/src/middleware/validate.js, greenfn/src/routes/index.js, greenfn/src/modules/auth/routes.js, greenfn/src/modules/contacts/routes.js, greenfn/src/modules/pipeline/routes.js, greenfn/src/modules/tasks/routes.js, greenfn/src/modules/interactions/routes.js, greenfn/src/modules/ai/routes.js, TASKS.md, REVIEW/README.md, REVIEW/NODE_EXPRESS.md, LOG.md
+- CHANGE_SUMMARY: Completed Node+Express setup checklist by introducing a structured Express app layout, adding CORS/JSON/logging/error middleware, defining API boundaries for auth/contacts/pipeline/tasks/interactions/ai, and applying request validation on write endpoints; verified health and validation behavior via local smoke checks, and documented outcomes in REVIEW.

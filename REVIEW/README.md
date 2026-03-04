@@ -6,6 +6,7 @@ This folder contains per-task review files for completed setup tasks.
 
 - `REACT.md` — React + Vite setup summary, reproduce commands, route checks, and file-type purposes.
 - `SHADCN_TAILWIND.md` — ShadCN + Tailwind setup summary, reproduce commands, verification steps, and file-type purposes.
+- `NODE_EXPRESS.md` — Node + Express setup summary, middleware/module-boundary checks, write-endpoint validation checks, and file-type purposes.
 
 ## Usage
 

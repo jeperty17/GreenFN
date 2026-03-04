@@ -18,10 +18,10 @@
 
 ### Node.js + Express.js
 
-- [ ] Initialize Express backend with TypeScript/JavaScript project structure.
-- [ ] Add middleware for CORS, JSON parsing, request logging, and centralized error handling.
-- [ ] Define API module boundaries for contacts, pipeline, tasks, interactions, AI, and auth.
-- [ ] Add request validation layer for all write endpoints.
+- [x] Initialize Express backend with TypeScript/JavaScript project structure.
+- [x] Add middleware for CORS, JSON parsing, request logging, and centralized error handling.
+- [x] Define API module boundaries for contacts, pipeline, tasks, interactions, AI, and auth.
+- [x] Add request validation layer for all write endpoints.
 
 ### PostgreSQL (Supabase)
 
