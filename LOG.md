@@ -131,3 +131,131 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-03-05 00:35:12 +08
 - FILES_CHANGED: greenfn/index.js, greenfn/package.json, greenfn/package-lock.json, greenfn/src/app.js, greenfn/src/server.js, greenfn/src/config/env.js, greenfn/src/utils/httpError.js, greenfn/src/middleware/requestLogger.js, greenfn/src/middleware/notFound.js, greenfn/src/middleware/errorHandler.js, greenfn/src/middleware/validate.js, greenfn/src/routes/index.js, greenfn/src/modules/auth/routes.js, greenfn/src/modules/contacts/routes.js, greenfn/src/modules/pipeline/routes.js, greenfn/src/modules/tasks/routes.js, greenfn/src/modules/interactions/routes.js, greenfn/src/modules/ai/routes.js, TASKS.md, REVIEW/README.md, REVIEW/NODE_EXPRESS.md, LOG.md
 - CHANGE_SUMMARY: Completed Node+Express setup checklist by introducing a structured Express app layout, adding CORS/JSON/logging/error middleware, defining API boundaries for auth/contacts/pipeline/tasks/interactions/ai, and applying request validation on write endpoints; verified health and validation behavior via local smoke checks, and documented outcomes in REVIEW.
+
+### LOG-0012
+
+- TASK: PostgreSQL (Supabase) Setup
+- SUBTASK: Configure connection string and secure environment variable handling
+- COMPLETED_AT: 2026-03-06 22:16:43 +08
+- FILES_CHANGED: greenfn/src/config/env.js, greenfn/.env.example, TASKS.md, REVIEW/README.md, REVIEW/POSTGRES_SUPABASE.md, LOG.md
+- CHANGE_SUMMARY: Added required backend env validation for `DATABASE_URL` and `DIRECT_URL`, created backend `.env.example` with safe Supabase connection placeholders, marked the corresponding Supabase setup checklist item complete, and documented reproducible verification steps in REVIEW.
+
+### LOG-0013
+
+- TASK: PostgreSQL (Supabase) Setup
+- SUBTASK: Decide and document auth approach (custom JWT vs Supabase Auth)
+- COMPLETED_AT: 2026-03-07 02:37:20 +08
+- FILES_CHANGED: TASKS.md, REVIEW/README.md, REVIEW/AUTH_APPROACH.md, docs/auth-approach.md, LOG.md
+- CHANGE_SUMMARY: Finalized MVP auth direction as custom JWT with user table, documented rationale/constraints/migration path in `docs/auth-approach.md`, added review documentation, and marked the setup checklist auth-approach decision item completed.
+
+### LOG-0014
+
+- TASK: PostgreSQL (Supabase) Setup
+- SUBTASK: Enable row-level security strategy for per-advisor data isolation
+- COMPLETED_AT: 2026-03-07 03:06:39 +08
+- FILES_CHANGED: greenfn/prisma/rls.sql, docs/rls-strategy.md, docs/auth-approach.md, REVIEW/RLS_STRATEGY.md, REVIEW/README.md, TASKS.md, LOG.md
+- CHANGE_SUMMARY: Added and executed an idempotent RLS policy script across advisor-owned/advisor-linked tables, documented runtime contract and verification workflow, added review documentation, removed stale auth doc note that RLS was out of scope, and marked the RLS setup checklist item completed.
+
+### LOG-0015
+
+- TASK: Prisma ORM Setup
+- SUBTASK: Define initial Prisma schema models and relationships
+- COMPLETED_AT: 2026-03-07 12:26:30 +08
+- FILES_CHANGED: TASKS.md, REVIEW/README.md, REVIEW/PRISMA_SCHEMA.md, LOG.md
+- CHANGE_SUMMARY: Verified existing Prisma schema models/relations and database migration alignment (`prisma validate`, `prisma migrate status`), documented reproducible checks in REVIEW, and marked the initial Prisma schema/relationships setup item as completed.
+
+### LOG-0016
+
+- TASK: Prisma ORM Setup
+- SUBTASK: Generate Prisma client and set up migration workflow
+- COMPLETED_AT: 2026-03-07 12:37:17 +08
+- FILES_CHANGED: greenfn/package.json, TASKS.md, docs/prisma-workflow.md, REVIEW/README.md, REVIEW/PRISMA_WORKFLOW.md, LOG.md
+- CHANGE_SUMMARY: Added standardized Prisma npm scripts for generate/migrate/status/deploy workflows, generated Prisma client using the new script, verified migration status via script, documented command workflow, and marked the Prisma workflow setup item completed.
+
+### LOG-0017
+
+- TASK: Prisma ORM Setup
+- SUBTASK: Seed baseline pipeline stages and test data for local development
+- COMPLETED_AT: 2026-03-07 12:52:22 +08
+- FILES_CHANGED: greenfn/prisma/seed.js, greenfn/package.json, TASKS.md, docs/prisma-seeding.md, REVIEW/README.md, REVIEW/PRISMA_SEEDING.md, LOG.md
+- CHANGE_SUMMARY: Implemented an idempotent PostgreSQL seed script creating baseline advisor/pipeline/contact/test records, added `prisma:seed` npm command, verified repeatable seeding with stable counts, documented seeding behavior, and marked the Prisma seeding setup item completed.
+
+### LOG-0018
+
+- TASK: Prisma ORM Setup
+- SUBTASK: Add Prisma error mapping strategy for API-friendly responses
+- COMPLETED_AT: 2026-03-07 12:57:05 +08
+- FILES_CHANGED: greenfn/src/utils/prismaError.js, greenfn/src/middleware/errorHandler.js, TASKS.md, docs/prisma-error-mapping.md, REVIEW/README.md, REVIEW/PRISMA_ERROR_MAPPING.md, LOG.md
+- CHANGE_SUMMARY: Added centralized Prisma error mapping utility, integrated it into global Express error handling, verified common Prisma code mappings (`P2002`, `P2003`, `P2025`) with runtime checks, documented the strategy, and marked the Prisma error mapping setup item completed.
+
+### LOG-0019
+
+- TASK: AI Provider Integration Setup
+- SUBTASK: Select AI provider and model(s) for summarization and drafting
+- COMPLETED_AT: 2026-03-07 13:00:12 +08
+- FILES_CHANGED: TASKS.md, docs/ai-provider-selection.md, REVIEW/README.md, REVIEW/AI_PROVIDER_SELECTION.md, LOG.md
+- CHANGE_SUMMARY: Finalized MVP AI provider/model decision (OpenAI with `gpt-4.1-mini` primary and `gpt-4.1-nano` fallback), documented rationale and scope boundaries, added review documentation, and marked the provider/model selection setup item completed.
+
+### LOG-0020
+
+- TASK: AI Provider Integration Setup
+- SUBTASK: Set up API keys and backend-only secret handling
+- COMPLETED_AT: 2026-03-07 13:11:05 +08
+- FILES_CHANGED: greenfn/src/config/env.js, greenfn/.env.example, docs/ai-secret-handling.md, REVIEW/AI_SECRET_HANDLING.md, TASKS.md, REVIEW/README.md, LOG.md
+- CHANGE_SUMMARY: Added backend-only AI env configuration placeholders and key guard helper, documented secure local/production key handling practices, verified no AI secret variables in frontend config, and marked the API key/secret handling setup item completed.
+
+### LOG-0021
+
+- TASK: AI Provider Integration Setup
+- SUBTASK: Create service wrapper for prompt templates, retries, and token/cost controls
+- COMPLETED_AT: 2026-03-07 13:16:44 +08
+- FILES_CHANGED: greenfn/src/modules/ai/service.js, docs/ai-service-wrapper.md, REVIEW/AI_SERVICE_WRAPPER.md, TASKS.md, REVIEW/README.md, LOG.md
+- CHANGE_SUMMARY: Added a reusable AI service wrapper with summary/draft prompt templates, transient-failure retry/backoff logic, primary/fallback model handling, and token/cost estimation controls; verified wrapper exports and utility behavior, documented usage/boundaries, and marked the wrapper setup task completed.
+
+### LOG-0022
+
+- TASK: AI Provider Integration Setup
+- SUBTASK: Define logging policy for AI inputs/outputs that avoids storing sensitive raw text unnecessarily
+- COMPLETED_AT: 2026-03-07 13:21:12 +08
+- FILES_CHANGED: greenfn/src/modules/ai/logging.js, greenfn/src/modules/ai/service.js, docs/ai-logging-policy.md, REVIEW/AI_LOGGING_POLICY.md, TASKS.md, REVIEW/README.md, LOG.md
+- CHANGE_SUMMARY: Added an enforceable AI-safe logging helper that records metadata only (hashes, lengths, usage, status, timing), integrated it across summary/draft start/success/failure flows, documented the policy and validation checklist, and marked the logging-policy setup item completed.
+
+### LOG-0023
+
+- TASK: Deployment (Vercel + Render/Railway) Setup
+- SUBTASK: Create Vercel project for frontend deployment
+- COMPLETED_AT: 2026-03-07 13:26:53 +08
+- FILES_CHANGED: greenfn-web/.gitignore, REVIEW/VERCEL_PROJECT.md, TASKS.md, REVIEW/README.md, LOG.md
+- CHANGE_SUMMARY: Created the `greenfn-web` project in Vercel under scope `chos-projects-6d59e476`, linked local `greenfn-web/` workspace using Vercel CLI, confirmed account authentication path, and documented reproducible validation commands while marking the checklist item completed.
+
+### LOG-0024
+
+- TASK: Deployment (Vercel + Render/Railway) Setup
+- SUBTASK: Create Render or Railway service for backend deployment
+- COMPLETED_AT: 2026-03-07 13:37:52 +08
+- FILES_CHANGED: TASKS.md, REVIEW/RAILWAY_SERVICE.md, REVIEW/README.md, LOG.md
+- CHANGE_SUMMARY: Logged into Railway CLI, created project `greenfn-backend`, created backend service `greenfn-api`, verified linked project/service status from `greenfn/`, documented reproducible checks, and marked the deployment checklist item completed.
+
+### LOG-0025
+
+- TASK: Deployment (Vercel + Render/Railway) Setup
+- SUBTASK: Set production environment variables for frontend, backend, database, and AI provider
+- COMPLETED_AT: 2026-03-07 13:47:17 +08
+- FILES_CHANGED: TASKS.md, REVIEW/DEPLOYMENT_ENV_VARS.md, REVIEW/README.md, LOG.md
+- CHANGE_SUMMARY: Configured Railway backend environment variables (`DATABASE_URL`, `DIRECT_URL`, runtime vars, AI provider/model, and `OPENAI_API_KEY`), generated Railway public backend domain, configured encrypted Vercel `VITE_API_BASE_URL` for Production and Development, verified variable presence, and documented the remaining preview-env caveat pending Vercel Git integration.
+
+### LOG-0026
+
+- TASK: Deployment (Vercel + Render/Railway) Setup
+- SUBTASK: Configure CORS allowlist for production frontend domain
+- COMPLETED_AT: 2026-03-07 13:51:40 +08
+- FILES_CHANGED: greenfn/src/app.js, greenfn/src/config/env.js, greenfn/.env.example, TASKS.md, REVIEW/CORS_ALLOWLIST.md, REVIEW/README.md, LOG.md
+- CHANGE_SUMMARY: Replaced open CORS policy with env-driven production allowlist logic, added backend env parsing/template support for `CORS_ALLOWED_ORIGINS`, set Railway production allowlist to `https://greenfn-web.vercel.app`, validated no code errors, and marked the deployment checklist item completed.
+
+### LOG-0027
+
+- TASK: Deployment (Vercel + Render/Railway) Setup
+- SUBTASK: Set up CI/CD from main branch with preview deployments
+- COMPLETED_AT: 2026-03-07 13:57:31 +08
+- FILES_CHANGED: .github/workflows/frontend-vercel.yml, .github/workflows/backend-railway.yml, docs/cicd-setup.md, REVIEW/CICD_SETUP.md, TASKS.md, REVIEW/README.md, LOG.md
+- CHANGE_SUMMARY: Added GitHub Actions workflows for Vercel frontend preview (PR to `main`) and production (push to `main`) deployments, plus Railway backend deployment on `main` pushes; documented required GitHub secrets and limitations from failed Vercel Dashboard repo linking; and marked the CI/CD checklist item completed.

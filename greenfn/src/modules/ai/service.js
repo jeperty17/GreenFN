@@ -1,0 +1,391 @@
+const { httpError } = require('../../utils/httpError')
+const {
+  AI_PROVIDER,
+  AI_PRIMARY_MODEL,
+  AI_FALLBACK_MODEL,
+  requireOpenAIApiKey,
+} = require('../../config/env')
+const { logAIEvent } = require('./logging')
+
+const OPENAI_ENDPOINT = 'https://api.openai.com/v1/chat/completions'
+
+const MODEL_PRICING_PER_1K = {
+  'gpt-4.1-mini': { input: 0.0004, output: 0.0016 },
+  'gpt-4.1-nano': { input: 0.0001, output: 0.0004 },
+}
+
+const defaultOptions = {
+  provider: AI_PROVIDER,
+  primaryModel: AI_PRIMARY_MODEL,
+  fallbackModel: AI_FALLBACK_MODEL,
+  maxRetries: 2,
+  retryBackoffMs: 350,
+  maxInputChars: 12000,
+  maxOutputTokens: 700,
+  timeoutMs: 12000,
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms))
+}
+
+function estimateTokenCount(text) {
+  if (!text || typeof text !== 'string') {
+    return 0
+  }
+
+  return Math.ceil(text.length / 4)
+}
+
+function estimateCostUsd({ model, inputTokens, outputTokens }) {
+  const pricing = MODEL_PRICING_PER_1K[model]
+
+  if (!pricing) {
+    return null
+  }
+
+  const inputCost = (inputTokens / 1000) * pricing.input
+  const outputCost = (outputTokens / 1000) * pricing.output
+
+  return Number((inputCost + outputCost).toFixed(6))
+}
+
+function isRetryableStatus(statusCode) {
+  return statusCode === 408 || statusCode === 409 || statusCode === 429 || statusCode >= 500
+}
+
+function buildSummaryMessages({ contactId, input, sourceMode = 'notes' }) {
+  return [
+    {
+      role: 'system',
+      content:
+        'You summarize financial-advisor interactions. Produce concise, recall-focused output with sections: Context, Key Facts, Client Needs, Decisions, Next Steps.',
+    },
+    {
+      role: 'user',
+      content: `Contact ID: ${contactId}\nSource Mode: ${sourceMode}\nInput:\n${input}`,
+    },
+  ]
+}
+
+function buildDraftMessages({ contactName, objective, context }) {
+  return [
+    {
+      role: 'system',
+      content:
+        'You draft short, professional advisor follow-up messages. Keep tone warm, specific, and action-oriented. Avoid legal or financial guarantees.',
+    },
+    {
+      role: 'user',
+      content: `Contact Name: ${contactName}\nObjective: ${objective}\nContext:\n${context}`,
+    },
+  ]
+}
+
+function normalizeTextOutput(responseJson) {
+  const choice = responseJson?.choices?.[0]
+  return choice?.message?.content || ''
+}
+
+async function callOpenAI({ apiKey, model, messages, maxOutputTokens, timeoutMs }) {
+  const controller = new AbortController()
+  const timeout = setTimeout(() => controller.abort(), timeoutMs)
+
+  try {
+    const response = await fetch(OPENAI_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json',
+      },
+      signal: controller.signal,
+      body: JSON.stringify({
+        model,
+        messages,
+        temperature: 0.4,
+        max_tokens: maxOutputTokens,
+      }),
+    })
+
+    if (!response.ok) {
+      let details = null
+      try {
+        details = await response.json()
+      } catch {
+        details = null
+      }
+
+      const error = httpError(response.status, 'AI provider request failed', {
+        provider: 'openai',
+        model,
+        statusCode: response.status,
+        details,
+      })
+      error.retryable = isRetryableStatus(response.status)
+      throw error
+    }
+
+    const payload = await response.json()
+    return normalizeTextOutput(payload)
+  } finally {
+    clearTimeout(timeout)
+  }
+}
+
+async function withRetry(operation, { maxRetries, retryBackoffMs }) {
+  let attempt = 0
+
+  while (attempt <= maxRetries) {
+    try {
+      return await operation()
+    } catch (error) {
+      if (attempt >= maxRetries || !error.retryable) {
+        throw error
+      }
+
+      const backoff = retryBackoffMs * Math.pow(2, attempt)
+      await sleep(backoff)
+      attempt += 1
+    }
+  }
+
+  throw httpError(500, 'Unexpected retry flow termination')
+}
+
+function validateInputText(input, maxInputChars) {
+  if (typeof input !== 'string' || input.trim().length === 0) {
+    throw httpError(400, 'AI input text is required')
+  }
+
+  if (input.length > maxInputChars) {
+    throw httpError(413, 'AI input exceeds configured size limit', {
+      maxInputChars,
+      inputLength: input.length,
+    })
+  }
+}
+
+function createAIService(config = {}) {
+  const options = { ...defaultOptions, ...config }
+
+  if (options.provider !== 'openai') {
+    throw httpError(400, 'Unsupported AI provider configured', {
+      provider: options.provider,
+    })
+  }
+
+  async function generateSummary({ contactId, input, sourceMode = 'notes' }) {
+    validateInputText(input, options.maxInputChars)
+    const startedAt = Date.now()
+
+    const messages = buildSummaryMessages({ contactId, input, sourceMode })
+    const inputTokens = estimateTokenCount(messages.map((message) => message.content).join('\n'))
+    const apiKey = requireOpenAIApiKey()
+
+    logAIEvent('info', 'summary_request_started', {
+      provider: options.provider,
+      model: options.primaryModel,
+      path: 'generateSummary',
+      contactId,
+      sourceMode,
+      inputText: input,
+    })
+
+    const runForModel = async (model) => {
+      const text = await withRetry(
+        () =>
+          callOpenAI({
+            apiKey,
+            model,
+            messages,
+            maxOutputTokens: options.maxOutputTokens,
+            timeoutMs: options.timeoutMs,
+          }),
+        {
+          maxRetries: options.maxRetries,
+          retryBackoffMs: options.retryBackoffMs,
+        }
+      )
+
+      const outputTokens = estimateTokenCount(text)
+      return {
+        text,
+        model,
+        usage: {
+          estimatedInputTokens: inputTokens,
+          estimatedOutputTokens: outputTokens,
+          estimatedCostUsd: estimateCostUsd({ model, inputTokens, outputTokens }),
+        },
+      }
+    }
+
+    try {
+      const result = await runForModel(options.primaryModel)
+      logAIEvent('info', 'summary_request_succeeded', {
+        provider: options.provider,
+        model: result.model,
+        path: 'generateSummary',
+        contactId,
+        sourceMode,
+        inputText: input,
+        outputText: result.text,
+        usage: result.usage,
+        durationMs: Date.now() - startedAt,
+      })
+
+      return result
+    } catch (primaryError) {
+      if (!options.fallbackModel || options.fallbackModel === options.primaryModel) {
+        logAIEvent('error', 'summary_request_failed', {
+          provider: options.provider,
+          model: options.primaryModel,
+          path: 'generateSummary',
+          contactId,
+          sourceMode,
+          inputText: input,
+          statusCode: primaryError?.statusCode || null,
+          errorMessage: primaryError?.message || 'AI summary request failed',
+          durationMs: Date.now() - startedAt,
+        })
+        throw primaryError
+      }
+
+      logAIEvent('warn', 'summary_primary_failed_using_fallback', {
+        provider: options.provider,
+        model: options.primaryModel,
+        path: 'generateSummary',
+        contactId,
+        sourceMode,
+        inputText: input,
+        statusCode: primaryError?.statusCode || null,
+        errorMessage: primaryError?.message || 'Primary model failed',
+      })
+
+      try {
+        const fallbackResult = await runForModel(options.fallbackModel)
+        logAIEvent('info', 'summary_request_succeeded', {
+          provider: options.provider,
+          model: fallbackResult.model,
+          path: 'generateSummary',
+          contactId,
+          sourceMode,
+          inputText: input,
+          outputText: fallbackResult.text,
+          usage: fallbackResult.usage,
+          durationMs: Date.now() - startedAt,
+        })
+
+        return fallbackResult
+      } catch (fallbackError) {
+        logAIEvent('error', 'summary_request_failed', {
+          provider: options.provider,
+          model: options.fallbackModel,
+          path: 'generateSummary',
+          contactId,
+          sourceMode,
+          inputText: input,
+          statusCode: fallbackError?.statusCode || null,
+          errorMessage: fallbackError?.message || 'AI summary request failed',
+          durationMs: Date.now() - startedAt,
+        })
+        throw fallbackError
+      }
+    }
+  }
+
+  async function draftMessage({ contactName, objective, context }) {
+    validateInputText(context, options.maxInputChars)
+    const startedAt = Date.now()
+
+    logAIEvent('info', 'draft_request_started', {
+      provider: options.provider,
+      model: options.primaryModel,
+      path: 'draftMessage',
+      contactName,
+      objective,
+      inputText: context,
+    })
+
+    const messages = buildDraftMessages({ contactName, objective, context })
+    const inputTokens = estimateTokenCount(messages.map((message) => message.content).join('\n'))
+    const apiKey = requireOpenAIApiKey()
+
+    let text
+    try {
+      text = await withRetry(
+        () =>
+          callOpenAI({
+            apiKey,
+            model: options.primaryModel,
+            messages,
+            maxOutputTokens: Math.min(options.maxOutputTokens, 320),
+            timeoutMs: options.timeoutMs,
+          }),
+        {
+          maxRetries: options.maxRetries,
+          retryBackoffMs: options.retryBackoffMs,
+        }
+      )
+    } catch (error) {
+      logAIEvent('error', 'draft_request_failed', {
+        provider: options.provider,
+        model: options.primaryModel,
+        path: 'draftMessage',
+        contactName,
+        objective,
+        inputText: context,
+        statusCode: error?.statusCode || null,
+        errorMessage: error?.message || 'AI draft request failed',
+        durationMs: Date.now() - startedAt,
+      })
+      throw error
+    }
+
+    const outputTokens = estimateTokenCount(text)
+
+    const result = {
+      text,
+      model: options.primaryModel,
+      usage: {
+        estimatedInputTokens: inputTokens,
+        estimatedOutputTokens: outputTokens,
+        estimatedCostUsd: estimateCostUsd({
+          model: options.primaryModel,
+          inputTokens,
+          outputTokens,
+        }),
+      },
+    }
+
+    logAIEvent('info', 'draft_request_succeeded', {
+      provider: options.provider,
+      model: result.model,
+      path: 'draftMessage',
+      contactName,
+      objective,
+      inputText: context,
+      outputText: result.text,
+      usage: result.usage,
+      durationMs: Date.now() - startedAt,
+    })
+
+    return result
+  }
+
+  return {
+    buildSummaryMessages,
+    buildDraftMessages,
+    generateSummary,
+    draftMessage,
+    estimateTokenCount,
+    estimateCostUsd,
+  }
+}
+
+module.exports = {
+  createAIService,
+  buildSummaryMessages,
+  buildDraftMessages,
+  estimateTokenCount,
+  estimateCostUsd,
+}

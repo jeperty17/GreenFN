@@ -25,32 +25,32 @@
 
 ### PostgreSQL (Supabase)
 
-- [ ] Create Supabase project and development database.
-- [ ] Configure database connection string and secure environment variable handling.
-- [ ] Decide and document auth approach (Supabase Auth vs custom JWT with user table).
-- [ ] Enable row-level security strategy aligned with per-advisor data isolation.
+- [x] Create Supabase project and development database.
+- [x] Configure database connection string and secure environment variable handling.
+- [x] Decide and document auth approach (Supabase Auth vs custom JWT with user table).
+- [x] Enable row-level security strategy aligned with per-advisor data isolation.
 
 ### Prisma ORM
 
-- [ ] Define initial Prisma schema models and relationships.
-- [ ] Generate Prisma client and set up migration workflow.
-- [ ] Seed baseline pipeline stages and test data for local development.
-- [ ] Add Prisma error mapping strategy for API-friendly responses.
+- [x] Define initial Prisma schema models and relationships.
+- [x] Generate Prisma client and set up migration workflow.
+- [x] Seed baseline pipeline stages and test data for local development.
+- [x] Add Prisma error mapping strategy for API-friendly responses.
 
 ### AI Provider Integration
 
-- [ ] Select AI provider and model(s) for summarization and drafting.
-- [ ] Set up API keys and backend-only secret handling.
-- [ ] Create a service wrapper for prompt templates, retries, and token/cost controls.
-- [ ] Define logging policy for AI inputs/outputs that avoids storing sensitive raw text unnecessarily.
+- [x] Select AI provider and model(s) for summarization and drafting.
+- [x] Set up API keys and backend-only secret handling.
+- [x] Create a service wrapper for prompt templates, retries, and token/cost controls.
+- [x] Define logging policy for AI inputs/outputs that avoids storing sensitive raw text unnecessarily.
 
 ### Deployment (Vercel + Render/Railway)
 
-- [ ] Create Vercel project for frontend deployment.
-- [ ] Create Render or Railway service for backend deployment.
-- [ ] Set production environment variables for frontend, backend, database, and AI provider.
-- [ ] Configure CORS allowlist for production frontend domain.
-- [ ] Set up CI/CD from main branch with preview deployments.
+- [x] Create Vercel project for frontend deployment.
+- [x] Create Render or Railway service for backend deployment.
+- [x] Set production environment variables for frontend, backend, database, and AI provider.
+- [x] Configure CORS allowlist for production frontend domain.
+- [x] Set up CI/CD from main branch with preview deployments.
 
 ---
 

@@ -1,17 +1,20 @@
+const { mapPrismaError } = require('../utils/prismaError')
+
 function errorHandler(error, _req, res, _next) {
-  const statusCode = error.statusCode || 500
+  const mappedError = mapPrismaError(error)
+  const statusCode = mappedError.statusCode || 500
   const payload = {
     error: {
-      message: error.message || 'Internal server error',
+      message: mappedError.message || 'Internal server error',
     },
   }
 
-  if (error.details) {
-    payload.error.details = error.details
+  if (mappedError.details) {
+    payload.error.details = mappedError.details
   }
 
-  if (process.env.NODE_ENV !== 'production' && error.stack) {
-    payload.error.stack = error.stack
+  if (process.env.NODE_ENV !== 'production' && mappedError.stack) {
+    payload.error.stack = mappedError.stack
   }
 
   res.status(statusCode).json(payload)
