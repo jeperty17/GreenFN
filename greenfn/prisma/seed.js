@@ -1,226 +1,146 @@
-require('dotenv/config')
-const { Client } = require('pg')
+'use strict'
 
-const advisor = {
-  id: 'seed-advisor-001',
-  email: 'advisor.seed@greenfn.local',
-  name: 'Seed Advisor',
-}
+require('dotenv').config()
 
-const pipelineStageNames = [
-  'New',
-  'Contacted',
-  'Booked',
-  'No-show',
-  'In Progress',
-  'Closed Won',
-  'Closed Lost',
+const { PrismaClient } = require('../generated/prisma')
+const { PrismaPg } = require('@prisma/adapter-pg')
+const { Pool } = require('pg')
+
+// Seed bypasses the Prisma proxy and connects directly via pg adapter.
+// DIRECT_URL must be reachable (port 5432). If it times out locally,
+// temporarily swap it for the pgbouncer URL (port 6543, no ?pgbouncer=true).
+const connectionString = (process.env.DIRECT_URL || process.env.DATABASE_URL || '')
+  .replace(/[?&]pgbouncer=true/gi, '').replace(/\?$/, '')
+
+const pool = new Pool({ connectionString, ssl: { rejectUnauthorized: false } })
+const prisma = new PrismaClient({ adapter: new PrismaPg(pool) })
+
+const ADVISOR_ID    = 'seed-user-001'
+const ADVISOR_EMAIL = 'advisor.seed@greenfn.local'
+
+const STAGES = [
+  { id: 'seed-stage-001', name: 'New',         order: 1 },
+  { id: 'seed-stage-002', name: 'Contacted',   order: 2 },
+  { id: 'seed-stage-003', name: 'Booked',      order: 3 },
+  { id: 'seed-stage-004', name: 'No-show',     order: 4 },
+  { id: 'seed-stage-005', name: 'In Progress', order: 5 },
+  { id: 'seed-stage-006', name: 'Closed Won',  order: 6 },
+  { id: 'seed-stage-007', name: 'Closed Lost', order: 7 },
 ]
 
-const contacts = [
-  {
-    id: 'seed-contact-001',
-    fullName: 'Alicia Tan',
-    email: 'alicia.tan@example.com',
-    phone: '+6591110001',
-    source: 'Instagram',
-    stageName: 'New',
-    type: 'LEAD',
-    isStarred: true,
-    notes: 'Interested in protection + savings review',
-  },
-  {
-    id: 'seed-contact-002',
-    fullName: 'Brandon Lim',
-    email: 'brandon.lim@example.com',
-    phone: '+6591110002',
-    source: 'Referral',
-    stageName: 'Booked',
-    type: 'LEAD',
-    isStarred: false,
-    notes: 'Booked first consultation for next week',
-  },
-  {
-    id: 'seed-contact-003',
-    fullName: 'Cheryl Ng',
-    email: 'cheryl.ng@example.com',
-    phone: '+6591110003',
-    source: 'Roadshow',
-    stageName: 'In Progress',
-    type: 'CLIENT',
-    isStarred: true,
-    notes: 'Existing client reviewing portfolio allocation',
-  },
+const CONTACTS = [
+  { id: 'seed-contact-001', fullName: 'Alice Tan',  type: 'LEAD',   stageId: 'seed-stage-001', email: 'alice.tan@example.com',  phone: '+6591000001', source: 'Referral'  },
+  { id: 'seed-contact-002', fullName: 'Bob Lim',    type: 'LEAD',   stageId: 'seed-stage-003', email: 'bob.lim@example.com',    phone: '+6591000002', source: 'Cold Call' },
+  { id: 'seed-contact-003', fullName: 'Carol Wong', type: 'CLIENT', stageId: 'seed-stage-006', email: 'carol.wong@example.com', phone: '+6591000003', source: 'Referral'  },
+]
+
+const TAGS = [
+  { id: 'seed-tag-001', name: 'High Priority' },
+  { id: 'seed-tag-002', name: 'Follow Up'     },
 ]
 
 async function seed() {
-  const connectionString = process.env.DIRECT_URL || process.env.DATABASE_URL
+  console.log('Starting seed...')
 
-  if (!connectionString) {
-    throw new Error('Missing DIRECT_URL or DATABASE_URL for seeding')
+  // ── Advisor user ───────────────────────────────────────────────────────
+  await prisma.user.upsert({
+    where:  { id: ADVISOR_ID },
+    update: {},
+    create: { id: ADVISOR_ID, email: ADVISOR_EMAIL, name: 'Seed Advisor' },
+  })
+  console.log('Upserted advisor user.')
+
+  // ── Pipeline stages ────────────────────────────────────────────────────
+  for (const stage of STAGES) {
+    await prisma.pipelineStage.upsert({
+      where:  { id: stage.id },
+      update: {},
+      create: { id: stage.id, advisorId: ADVISOR_ID, name: stage.name, order: stage.order },
+    })
   }
+  console.log('Upserted 7 pipeline stages.')
 
-  const client = new Client({ connectionString })
-  await client.connect()
-
-  try {
-    await client.query('BEGIN')
-
-    await client.query('SELECT set_config($1, $2, false)', ['app.current_advisor_id', advisor.id])
-
-    await client.query(
-      `INSERT INTO "User" ("id", "email", "name", "createdAt", "updatedAt")
-       VALUES ($1, $2, $3, NOW(), NOW())
-       ON CONFLICT ("id") DO UPDATE
-       SET "email" = EXCLUDED."email",
-           "name" = EXCLUDED."name",
-           "updatedAt" = NOW()`,
-      [advisor.id, advisor.email, advisor.name]
-    )
-
-    for (let index = 0; index < pipelineStageNames.length; index += 1) {
-      const stageName = pipelineStageNames[index]
-      const stageOrder = index + 1
-      const stageId = `seed-stage-${String(stageOrder).padStart(2, '0')}`
-
-      await client.query(
-        `INSERT INTO "PipelineStage" ("id", "advisorId", "name", "order", "createdAt", "updatedAt")
-         VALUES ($1, $2, $3, $4, NOW(), NOW())
-         ON CONFLICT ("advisorId", "name") DO UPDATE
-         SET "order" = EXCLUDED."order",
-             "updatedAt" = NOW()`,
-        [stageId, advisor.id, stageName, stageOrder]
-      )
-    }
-
-    const stageResult = await client.query(
-      `SELECT "id", "name"
-       FROM "PipelineStage"
-       WHERE "advisorId" = $1`,
-      [advisor.id]
-    )
-
-    const stageIdByName = new Map(stageResult.rows.map((row) => [row.name, row.id]))
-
-    for (const contact of contacts) {
-      const stageId = stageIdByName.get(contact.stageName)
-
-      if (!stageId) {
-        throw new Error(`Missing pipeline stage id for ${contact.stageName}`)
-      }
-
-      await client.query(
-        `INSERT INTO "Contact" (
-          "id", "advisorId", "type", "stageId", "fullName", "phone", "email", "source", "isStarred", "notes", "createdAt", "updatedAt"
-         )
-         VALUES ($1, $2, $3::"ContactType", $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
-         ON CONFLICT ("id") DO UPDATE
-         SET "advisorId" = EXCLUDED."advisorId",
-             "type" = EXCLUDED."type",
-             "stageId" = EXCLUDED."stageId",
-             "fullName" = EXCLUDED."fullName",
-             "phone" = EXCLUDED."phone",
-             "email" = EXCLUDED."email",
-             "source" = EXCLUDED."source",
-             "isStarred" = EXCLUDED."isStarred",
-             "notes" = EXCLUDED."notes",
-             "updatedAt" = NOW()`,
-        [
-          contact.id,
-          advisor.id,
-          contact.type,
-          stageId,
-          contact.fullName,
-          contact.phone,
-          contact.email,
-          contact.source,
-          contact.isStarred,
-          contact.notes,
-        ]
-      )
-    }
-
-    await client.query(
-      `INSERT INTO "Tag" ("id", "advisorId", "name")
-       VALUES ($1, $2, $3)
-       ON CONFLICT ("advisorId", "name") DO NOTHING`,
-      ['seed-tag-high-priority', advisor.id, 'High Priority']
-    )
-
-    await client.query(
-      `INSERT INTO "Tag" ("id", "advisorId", "name")
-       VALUES ($1, $2, $3)
-       ON CONFLICT ("advisorId", "name") DO NOTHING`,
-      ['seed-tag-family', advisor.id, 'Family Planning']
-    )
-
-    await client.query(
-      `INSERT INTO "ContactTag" ("contactId", "tagId")
-       VALUES ($1, $2)
-       ON CONFLICT ("contactId", "tagId") DO NOTHING`,
-      ['seed-contact-001', 'seed-tag-high-priority']
-    )
-
-    await client.query(
-      `INSERT INTO "ContactTag" ("contactId", "tagId")
-       VALUES ($1, $2)
-       ON CONFLICT ("contactId", "tagId") DO NOTHING`,
-      ['seed-contact-003', 'seed-tag-family']
-    )
-
-    await client.query(
-      `INSERT INTO "Interaction" ("id", "contactId", "type", "occurredAt", "notes", "createdAt")
-       VALUES ($1, $2, $3::"InteractionType", NOW() - INTERVAL '2 days', $4, NOW())
-       ON CONFLICT ("id") DO UPDATE
-       SET "notes" = EXCLUDED."notes"`,
-      ['seed-interaction-001', 'seed-contact-001', 'WHATSAPP', 'Discussed child education planning goals.']
-    )
-
-    await client.query(
-      `INSERT INTO "NextStep" (
-         "id", "contactId", "title", "description", "dueAt", "status", "createdAt", "updatedAt"
-       )
-       VALUES ($1, $2, $3, $4, NOW() + INTERVAL '1 day', $5::"TaskStatus", NOW(), NOW())
-       ON CONFLICT ("id") DO UPDATE
-       SET "title" = EXCLUDED."title",
-           "description" = EXCLUDED."description",
-           "dueAt" = EXCLUDED."dueAt",
-           "status" = EXCLUDED."status",
-           "updatedAt" = NOW()`,
-      [
-        'seed-next-step-001',
-        'seed-contact-001',
-        'Send follow-up proposal',
-        'Prepare recommendation summary and send by WhatsApp.',
-        'OPEN',
-      ]
-    )
-
-    await client.query('COMMIT')
-
-    const summary = await client.query(
-      `SELECT
-         (SELECT COUNT(*) FROM "PipelineStage" WHERE "advisorId" = $1) AS stages,
-         (SELECT COUNT(*) FROM "Contact" WHERE "advisorId" = $1) AS contacts,
-         (SELECT COUNT(*) FROM "Tag" WHERE "advisorId" = $1) AS tags`,
-      [advisor.id]
-    )
-
-    const result = summary.rows[0]
-    console.log('Seed completed successfully')
-    console.log(`Advisor: ${advisor.id}`)
-    console.log(`Pipeline stages: ${result.stages}`)
-    console.log(`Contacts: ${result.contacts}`)
-    console.log(`Tags: ${result.tags}`)
-  } catch (error) {
-    await client.query('ROLLBACK')
-    throw error
-  } finally {
-    await client.end()
+  // ── Contacts ───────────────────────────────────────────────────────────
+  for (const c of CONTACTS) {
+    await prisma.contact.upsert({
+      where:  { id: c.id },
+      update: {},
+      create: {
+        id:        c.id,
+        advisorId: ADVISOR_ID,
+        fullName:  c.fullName,
+        type:      c.type,
+        stageId:   c.stageId,
+        email:     c.email,
+        phone:     c.phone,
+        source:    c.source,
+      },
+    })
   }
+  console.log('Upserted 3 contacts.')
+
+  // ── Tags ───────────────────────────────────────────────────────────────
+  for (const tag of TAGS) {
+    await prisma.tag.upsert({
+      where:  { id: tag.id },
+      update: {},
+      create: { id: tag.id, advisorId: ADVISOR_ID, name: tag.name },
+    })
+  }
+  console.log('Upserted 2 tags.')
+
+  // ── Contact-tag links ──────────────────────────────────────────────────
+  // Alice → both tags; Bob → Follow Up
+  const contactTags = [
+    { contactId: 'seed-contact-001', tagId: 'seed-tag-001' },
+    { contactId: 'seed-contact-001', tagId: 'seed-tag-002' },
+    { contactId: 'seed-contact-002', tagId: 'seed-tag-002' },
+  ]
+  for (const ct of contactTags) {
+    await prisma.contactTag.upsert({
+      where:  { contactId_tagId: { contactId: ct.contactId, tagId: ct.tagId } },
+      update: {},
+      create: ct,
+    })
+  }
+  console.log('Upserted contact-tag links.')
+
+  // ── Sample interaction ─────────────────────────────────────────────────
+  await prisma.interaction.upsert({
+    where:  { id: 'seed-interaction-001' },
+    update: {},
+    create: {
+      id:        'seed-interaction-001',
+      contactId: 'seed-contact-003',
+      type:      'MEETING',
+      notes:     "Reviewed Carol's current policy coverage. She is interested in upgrading her life plan.",
+    },
+  })
+  console.log('Upserted sample interaction.')
+
+  // ── Sample next-step task ──────────────────────────────────────────────
+  await prisma.nextStep.upsert({
+    where:  { id: 'seed-nextstep-001' },
+    update: {},
+    create: {
+      id:          'seed-nextstep-001',
+      contactId:   'seed-contact-002',
+      title:       'Send follow-up proposal',
+      description: 'Email Bob the term life proposal discussed during the call.',
+      status:      'OPEN',
+    },
+  })
+  console.log('Upserted sample next-step task.')
+
+  console.log('\nSeed complete.')
+  console.log('  Advisor : seed-user-001 (advisor.seed@greenfn.local)')
+  console.log('  Stages  : 7')
+  console.log('  Contacts: 3  (Alice, Bob, Carol)')
+  console.log('  Tags    : 2  (High Priority, Follow Up)')
+  console.log('  Interactions: 1')
+  console.log('  Next steps  : 1')
 }
 
-seed().catch((error) => {
-  console.error(error)
-  process.exit(1)
-})
+seed()
+  .catch((e) => { console.error('Seed failed:', e.message); process.exit(1) })
+  .finally(async () => { await prisma.$disconnect(); await pool.end() })
