@@ -47,3 +47,22 @@ Do not start implementation before reading these files.
 - Confirm current branch before any branch-sensitive guidance.
 - If user expects `main` updates, verify whether commits are on another branch first.
 - Explain exact commands to reconcile branch divergence when needed.
+
+## 7) Parallel Team DB Workflow (Modular + Low-Conflict)
+
+- Do not prebuild all future DB schema up front. Prefer feature-sliced, additive migrations.
+- Use migration units per feature slice (small, reviewable, and merge-friendly):
+  - `expand`: add nullable columns/new tables/indexes only
+  - `adopt`: update app reads/writes to new fields
+  - `contract`: remove legacy fields later in a dedicated cleanup step
+- Never edit or reorder already-merged migration files. Add a new migration for any correction.
+- Rebase onto latest `main` before creating a new migration to reduce drift.
+- If two branches modify the same table, merge code first, then create one reconciliation migration on top.
+- Keep seed scripts idempotent (`upsert`/`skipDuplicates`) so teammates can reset safely.
+- For schema changes, run narrow verification first: `prisma validate`, migration status, targeted endpoint checks.
+
+### Contacts Hub DB/Deployment Hold Rule
+
+- Until explicitly requested by the user, do **not** execute Contacts Hub `DB` or `DEPLOYMENT` checklist items in `TASKS.md`.
+- Allowed while hold is active: Contacts Hub `FRONTEND` and `BACKEND` implementation tasks only.
+- If asked to continue Contacts Hub work, stop at the next DB/Deployment boundary and request confirmation.

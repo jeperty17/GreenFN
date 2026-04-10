@@ -259,3 +259,59 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-03-07 13:57:31 +08
 - FILES_CHANGED: .github/workflows/frontend-vercel.yml, .github/workflows/backend-railway.yml, docs/cicd-setup.md, REVIEW/CICD_SETUP.md, TASKS.md, REVIEW/README.md, LOG.md
 - CHANGE_SUMMARY: Added GitHub Actions workflows for Vercel frontend preview (PR to `main`) and production (push to `main`) deployments, plus Railway backend deployment on `main` pushes; documented required GitHub secrets and limitations from failed Vercel Dashboard repo linking; and marked the CI/CD checklist item completed.
+
+### LOG-0028
+
+- TASK: Prisma ORM Setup
+- SUBTASK: Fix local Supabase seed TLS mismatch for Prisma upsert
+- COMPLETED_AT: 2026-03-27 14:35:18 +08
+- FILES_CHANGED: greenfn/prisma/seed.js, LOG.md
+- CHANGE_SUMMARY: Fixed seed connection initialization to avoid forcing SSL for localhost/127.0.0.1 Supabase connections while retaining TLS for non-local hosts; verified `npm run prisma:seed` now completes successfully with all baseline records upserted.dfcf
+
+### LOG-0029
+
+- TASK: Contacts Hub Implementation
+- SUBTASK: Step 1 list/table view with search + filters and backend list endpoint
+- COMPLETED_AT: 2026-04-10 21:38:19 +08
+- FILES_CHANGED: greenfn/src/modules/contacts/routes.js, greenfn-web/src/pages/ContactsHubPage.tsx, TASKS.md, REVIEW/CONTACTS_HUB.md, REVIEW/README.md, LOG.md
+- CHANGE_SUMMARY: Implemented Prisma-backed `GET /api/contacts` with pagination and filter query parameters (search/type/source/starred), replaced frontend Contacts Hub scaffold with a functional table/list UI including search and filter controls plus pagination, validated frontend build success, attempted backend route smoke test (`/api/contacts`) and recorded current Prisma database connectivity blocker (`P6001`) for local environment follow-up.
+
+### LOG-0030
+
+- TASK: Contacts Hub Implementation
+- SUBTASK: Resolve backend Prisma connectivity and complete list endpoint verification
+- COMPLETED_AT: 2026-04-10 21:42:34 +08
+- FILES_CHANGED: greenfn/src/lib/prisma.js, TASKS.md, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Replaced Prisma runtime `accelerateUrl` initialization with PostgreSQL adapter-based client setup in `greenfn/src/lib/prisma.js` to use project database URLs reliably, re-ran backend smoke test and confirmed `GET /api/contacts` returns seeded contact rows successfully, and marked corresponding Contacts Hub backend search/filter/pagination tasks complete.
+
+### LOG-0031
+
+- TASK: Contacts Hub Implementation
+- SUBTASK: Create/edit contact form and backend write endpoint normalization
+- COMPLETED_AT: 2026-04-10 21:50:39 +08
+- FILES_CHANGED: greenfn/src/modules/contacts/routes.js, greenfn-web/src/pages/ContactsHubPage.tsx, TASKS.md, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Implemented functional contact create/update endpoints with validation and normalization for core fields (including birthday, type, starred flag, and structured priorities/portfolio metadata), added edit actions and a full create/edit form to Contacts Hub frontend, validated frontend build, and smoke-tested create/patch/query API flows successfully.
+
+### LOG-0032
+
+- TASK: Contacts Hub Implementation
+- SUBTASK: Tag creation/assignment flows and star focus marker controls
+- COMPLETED_AT: 2026-04-10 22:01:48 +08
+- FILES_CHANGED: greenfn/src/modules/contacts/routes.js, greenfn-web/src/pages/ContactsHubPage.tsx, TASKS.md, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Added backend tag endpoints (`GET/POST /api/contacts/tags`, contact tag assign/remove, and starred toggle), extended contacts create/update payload handling for tag names, implemented frontend tag management and row-level assignment/removal UI, enabled direct focus marker toggling from table rows, validated frontend build, and smoke-tested create/list/assign/remove/tagged star toggle API behavior.
+
+### LOG-0033
+
+- TASK: Contacts Hub Implementation
+- SUBTASK: Complete backend contacts CRUD endpoints and verify get/delete flows
+- COMPLETED_AT: 2026-04-10 22:03:51 +08
+- FILES_CHANGED: greenfn/src/modules/contacts/routes.js, TASKS.md, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Added `GET /api/contacts/:contactId` and `DELETE /api/contacts/:contactId` endpoints to complete backend contacts CRUD coverage, fixed contact update path to include advisor context when replacing tags via `tagNames`, validated no diagnostics errors, and smoke-tested create/get-by-id/delete/not-found behavior successfully.
+
+### LOG-0034
+
+- TASK: Team Workflow Governance
+- SUBTASK: Add modular migration policy and Contacts Hub DB/deployment hold instructions
+- COMPLETED_AT: 2026-04-10 22:10:20 +08
+- FILES_CHANGED: .github/copilot-instructions.md, LOG.md
+- CHANGE_SUMMARY: Added a parallel-team database workflow policy to `.github/copilot-instructions.md` covering feature-sliced additive migrations, expand/adopt/contract sequencing, rebase/reconciliation guidance, and idempotent seeding expectations; also added explicit instruction to defer Contacts Hub DB and Deployment checklist items until user explicitly requests them.

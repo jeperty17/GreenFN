@@ -60,18 +60,18 @@
 
 ### FRONTEND
 
-- [ ] Build Contacts Hub page with list/table view for leads and clients.
-- [ ] Build create/edit contact form with fields for name, phone, email, type, source, birthday, priorities, and optional portfolio summary.
-- [ ] Implement search by name/contact details.
-- [ ] Implement filters by lead/client type and acquisition source.
-- [ ] Implement tag creation, assignment, and star/focus marker UI.
+- [x] Build Contacts Hub page with list/table view for leads and clients.
+- [x] Build create/edit contact form with fields for name, phone, email, type, source, birthday, priorities, and optional portfolio summary.
+- [x] Implement search by name/contact details.
+- [x] Implement filters by lead/client type and acquisition source.
+- [x] Implement tag creation, assignment, and star/focus marker UI.
 
 ### BACKEND
 
-- [ ] Implement contacts CRUD endpoints.
-- [ ] Implement search and filtering endpoints for type, source, tags, and starred contacts.
-- [ ] Implement input validation and normalization for contact fields.
-- [ ] Implement pagination and sorting for large contact lists.
+- [x] Implement contacts CRUD endpoints.
+- [x] Implement search and filtering endpoints for type, source, tags, and starred contacts.
+- [x] Implement input validation and normalization for contact fields.
+- [x] Implement pagination and sorting for large contact lists.
 
 ### DB
 
