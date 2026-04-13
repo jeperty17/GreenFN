@@ -148,17 +148,17 @@
 
 ### FRONTEND
 
-- [ ] Build per-contact chronological timeline UI for interaction logs.
-- [ ] Build interaction entry form with type, date, and notes.
-- [ ] Add quick filters by interaction type and date range.
-- [ ] Add link from timeline entries to related next-step tasks.
+- [x] Build per-contact chronological timeline UI for interaction logs.
+- [x] Build interaction entry form with type, date, and notes.
+- [x] Add quick filters by interaction type and date range.
+- [x] Add link from timeline entries to related next-step tasks.
 
 ### BACKEND
 
-- [ ] Implement CRUD endpoints for interaction entries.
-- [ ] Implement list endpoint with pagination and sorting by interaction date.
-- [ ] Implement validation for interaction type/date and optional notes size limits.
-- [ ] Implement linkage support between interactions and generated summaries.
+- [x] Implement CRUD endpoints for interaction entries.
+- [x] Implement list endpoint with pagination and sorting by interaction date.
+- [x] Implement validation for interaction type/date and optional notes size limits.
+- [x] Implement linkage support between interactions and generated summaries.
 
 ### DB
 

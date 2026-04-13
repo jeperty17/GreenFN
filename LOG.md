@@ -315,3 +315,91 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-04-10 22:10:20 +08
 - FILES_CHANGED: .github/copilot-instructions.md, LOG.md
 - CHANGE_SUMMARY: Added a parallel-team database workflow policy to `.github/copilot-instructions.md` covering feature-sliced additive migrations, expand/adopt/contract sequencing, rebase/reconciliation guidance, and idempotent seeding expectations; also added explicit instruction to defer Contacts Hub DB and Deployment checklist items until user explicitly requests them.
+
+### LOG-0035
+
+- TASK: Interaction History Implementation
+- SUBTASK: Frontend per-contact chronological timeline UI
+- COMPLETED_AT: 2026-04-13 16:02:06 +08
+- FILES_CHANGED: greenfn-web/src/pages/InteractionHistoryPage.tsx, TASKS.md, REVIEW/INTERACTION_HISTORY.md, REVIEW/README.md, LOG.md
+- CHANGE_SUMMARY: Replaced Interaction History placeholder page with a functional per-contact chronological timeline UI, including contact selection backed by `GET /api/contacts`, timeline card rendering sorted by interaction date, and user-facing loading/error/empty states; marked the first Interaction History frontend task complete and added review documentation.
+
+### LOG-0036
+
+- TASK: Tooling Maintenance
+- SUBTASK: Resolve TypeScript deprecation diagnostics in project tsconfig files
+- COMPLETED_AT: 2026-04-13 16:16:07 +08
+- FILES_CHANGED: greenfn/tsconfig.json, greenfn-web/tsconfig.app.json, greenfn-web/tsconfig.json, LOG.md
+- CHANGE_SUMMARY: Addressed active TypeScript deprecation diagnostics by adding `ignoreDeprecations` controls to frontend tsconfig files and updating backend module settings to modern Node16 resolution in `greenfn/tsconfig.json`; verified resolved compiler config via `tsc --showConfig` and rechecked workspace diagnostics.
+
+### LOG-0037
+
+- TASK: Tooling Maintenance
+- SUBTASK: Resolve tsconfig.node baseUrl deprecation warning
+- COMPLETED_AT: 2026-04-13 16:17:57 +08
+- FILES_CHANGED: greenfn-web/tsconfig.node.json, LOG.md
+- CHANGE_SUMMARY: Fixed remaining TypeScript deprecation diagnostic in `greenfn-web/tsconfig.node.json` by adding `ignoreDeprecations: "6.0"` to compiler options and verified the file reports no errors in workspace diagnostics.
+
+### LOG-0038
+
+- TASK: Interaction History Implementation
+- SUBTASK: Frontend interaction entry form (type, date, notes)
+- COMPLETED_AT: 2026-04-13 16:20:33 +08
+- FILES_CHANGED: greenfn-web/src/pages/InteractionHistoryPage.tsx, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Added an Interaction History entry form on the frontend with interaction type selector, date-time input, and notes textarea, plus required-field validation and success/error feedback; successful submissions now insert a new entry into the selected contact timeline in chronological order, and the second Interaction History frontend checklist item was marked complete.
+
+### LOG-0039
+
+- TASK: Interaction History Implementation
+- SUBTASK: Frontend quick filters by interaction type and date range
+- COMPLETED_AT: 2026-04-13 16:43:05 +08
+- FILES_CHANGED: greenfn-web/src/pages/InteractionHistoryPage.tsx, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Added quick timeline filters for interaction type and start/end date range on the Interaction History page, including a reset action to restore full results; filter logic now narrows entries client-side after per-contact selection while preserving chronological ordering, and the third Interaction History frontend task was marked complete.
+
+### LOG-0040
+
+- TASK: Interaction History Implementation
+- SUBTASK: Frontend links from timeline entries to related next-step tasks
+- COMPLETED_AT: 2026-04-13 16:57:23 +08
+- FILES_CHANGED: greenfn-web/src/pages/InteractionHistoryPage.tsx, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Added related-task metadata to interaction timeline entries and rendered `View task` links for entries with associated next-step tasks, deep-linking to Today view using task/contact query parameters; marked the final Interaction History frontend checklist item as completed and updated review documentation.
+
+### LOG-0041
+
+- TASK: Interaction History Implementation
+- SUBTASK: Backend CRUD endpoints for interaction entries
+- COMPLETED_AT: 2026-04-13 17:07:29 +08
+- FILES_CHANGED: greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Replaced scaffolded interactions routes with functional CRUD endpoints (`POST /api/interactions`, `GET /api/interactions/:interactionId`, `PATCH /api/interactions/:interactionId`, `DELETE /api/interactions/:interactionId`) and a basic contact-scoped read list endpoint (`GET /api/interactions?contactId=...`), including advisor/contact ownership checks and request validation; verified route module loads successfully.
+
+### LOG-0042
+
+- TASK: Interaction History Implementation
+- SUBTASK: Backend list endpoint pagination and sorting by interaction date
+- COMPLETED_AT: 2026-04-13 17:26:54 +08
+- FILES_CHANGED: greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Enhanced `GET /api/interactions` to support pagination (`page`, `pageSize`) and interaction-date sorting (`sortDirection`) over `occurredAt`, returning pagination metadata and sort metadata while preserving advisor/contact scoping; verified route module loads and diagnostics pass.
+
+### LOG-0043
+
+- TASK: Team Workflow Governance
+- SUBTASK: Strengthen DB migration policy and add short-term parallel checklist
+- COMPLETED_AT: 2026-04-14 01:04:38 +08
+- FILES_CHANGED: .github/copilot-instructions.md, docs/prisma-workflow.md, LOG.md
+- CHANGE_SUMMARY: Added explicit compatibility-window and contract-gate rules, shared-table collision protocol, and contract cleanup cadence to `.github/copilot-instructions.md`; also added a concise short-term team checklist in `docs/prisma-workflow.md` for migration phase declaration, rebasing, compatibility expectations, reconciliation strategy, validation commands, and rollback planning.
+
+### LOG-0044
+
+- TASK: Interaction History Implementation
+- SUBTASK: Backend validation for interaction type/date and notes size limit
+- COMPLETED_AT: 2026-04-14 01:08:35 +08
+- FILES_CHANGED: greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Added explicit interaction payload validation helper for notes and enforced optional notes size limits (max 4000 characters) across create/update flows while preserving existing type/date validation; validated diagnostics and route module load, then marked the corresponding backend task complete.
+
+### LOG-0045
+
+- TASK: Interaction History Implementation
+- SUBTASK: Backend linkage support between interactions and generated summaries
+- COMPLETED_AT: 2026-04-14 01:10:32 +08
+- FILES_CHANGED: greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Added interaction-summary linkage support via `POST /api/interactions/:interactionId/summary-link` and `DELETE /api/interactions/:interactionId/summary-link`, including payload validation and structured summary metadata storage in `aiSummary`; extended mapped interaction payloads with parsed `aiSummaryLink` for consumer use and marked the final Interaction History backend task complete.
