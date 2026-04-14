@@ -323,3 +323,19 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-04-10 22:10:20 +08
 - FILES_CHANGED: .github/copilot-instructions.md, LOG.md
 - CHANGE_SUMMARY: Added a parallel-team database workflow policy to `.github/copilot-instructions.md` covering feature-sliced additive migrations, expand/adopt/contract sequencing, rebase/reconciliation guidance, and idempotent seeding expectations; also added explicit instruction to defer Contacts Hub DB and Deployment checklist items until user explicitly requests them.
+
+### LOG-0047
+
+- TASK: Deployment Reliability
+- SUBTASK: Fix Railway Prisma client module resolution at runtime
+- COMPLETED_AT: 2026-04-14 21:03:48 +08
+- FILES_CHANGED: greenfn/src/lib/prisma.js, greenfn/prisma/seed.js, greenfn/prisma/schema.prisma, greenfn/package.json, LOG.md
+- CHANGE_SUMMARY: Replaced runtime and seed Prisma imports from custom generated paths to `@prisma/client`, removed custom Prisma generator output override so client generates to default package location, added `postinstall` generation via `npx prisma generate` for deployment installs, then validated successful local generation and backend startup.
+
+### LOG-0048
+
+- TASK: Deployment Reliability
+- SUBTASK: Add dual-path Prisma client loading to prevent output path mismatch crashes
+- COMPLETED_AT: 2026-04-14 21:31:54 +08
+- FILES_CHANGED: greenfn/src/lib/prisma.js, greenfn/prisma/seed.js, LOG.md
+- CHANGE_SUMMARY: Added runtime/seed fallback imports that first try `@prisma/client` and then fall back to generated client paths, allowing service startup regardless of whether Prisma client generation targets default `.prisma` output or `generated/prisma`; validated backend boots successfully with current start command.
