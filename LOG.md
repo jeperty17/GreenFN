@@ -52,6 +52,14 @@ Track all completed changes made in this repository, now and in the future, incl
 - FILES_CHANGED: TASKS.md
 - CHANGE_SUMMARY: Created `TASKS.md` with `SETUP` and `IMPLEMENTATION` sections, including feature-specific `FRONTEND`, `BACKEND`, `DB`, and `DEPLOYMENT` subtasks.
 
+### LOG-0046
+
+- TASK: Tooling Maintenance
+- SUBTASK: Reapply TypeScript deprecation-safe tsconfig settings after branch/config drift
+- COMPLETED_AT: 2026-04-14 10:08:46 +08
+- FILES_CHANGED: greenfn/tsconfig.json, greenfn-web/tsconfig.app.json, LOG.md
+- CHANGE_SUMMARY: Reapplied TypeScript deprecation-safe configuration by updating backend `module/moduleResolution` to `Node16/node16` and restoring `ignoreDeprecations: "6.0"` in frontend app tsconfig; verified all tracked tsconfig files report no diagnostics.
+
 ### LOG-0002
 
 - TASK: Project Governance
