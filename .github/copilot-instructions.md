@@ -61,6 +61,27 @@ Do not start implementation before reading these files.
 - Keep seed scripts idempotent (`upsert`/`skipDuplicates`) so teammates can reset safely.
 - For schema changes, run narrow verification first: `prisma validate`, migration status, targeted endpoint checks.
 
+### Mandatory Compatibility Window and Contract Gates
+
+- During `expand` and `adopt`, maintain backward compatibility across one full integration cycle: old and new schema paths must both remain readable/writable until all dependent branches are merged.
+- Do not run `contract` in the same PR as `expand` or first-time `adopt` for a feature slice.
+- `contract` is allowed only when all gates are true:
+  - No remaining app references to legacy fields/endpoints.
+  - Staging verification passes for affected routes and critical user flows.
+  - Team confirms active branches touching the same table have rebased onto latest `main`.
+  - A rollback path is documented (revert/restore plan and data recovery notes when applicable).
+
+### Shared-Table Collision Protocol
+
+- If multiple branches change the same table, merge application code first, then add exactly one reconciliation migration on top of latest `main`.
+- Never rewrite already-merged migrations to resolve conflicts.
+- Each migration PR must declare: migration phase (`expand|adopt|contract`), owner, affected tables/indexes, and compatibility impact.
+
+### Contract Cleanup Cadence
+
+- Prefer dedicated cleanup windows for `contract` changes instead of bundling with active feature delivery.
+- Keep `contract` PRs small and reviewable (schema cleanup + minimal app cleanup only).
+
 ### Contacts Hub DB/Deployment Hold Rule
 
 - Until explicitly requested by the user, do **not** execute Contacts Hub `DB` or `DEPLOYMENT` checklist items in `TASKS.md`.

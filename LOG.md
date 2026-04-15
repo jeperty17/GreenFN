@@ -324,18 +324,146 @@ Track all completed changes made in this repository, now and in the future, incl
 - FILES_CHANGED: .github/copilot-instructions.md, LOG.md
 - CHANGE_SUMMARY: Added a parallel-team database workflow policy to `.github/copilot-instructions.md` covering feature-sliced additive migrations, expand/adopt/contract sequencing, rebase/reconciliation guidance, and idempotent seeding expectations; also added explicit instruction to defer Contacts Hub DB and Deployment checklist items until user explicitly requests them.
 
+### LOG-0035
+
+- TASK: Interaction History Implementation
+- SUBTASK: Frontend per-contact chronological timeline UI
+- COMPLETED_AT: 2026-04-13 16:02:06 +08
+- FILES_CHANGED: greenfn-web/src/pages/InteractionHistoryPage.tsx, TASKS.md, REVIEW/INTERACTION_HISTORY.md, REVIEW/README.md, LOG.md
+- CHANGE_SUMMARY: Replaced Interaction History placeholder page with a functional per-contact chronological timeline UI, including contact selection backed by `GET /api/contacts`, timeline card rendering sorted by interaction date, and user-facing loading/error/empty states; marked the first Interaction History frontend task complete and added review documentation.
+
+### LOG-0036
+
+- TASK: Tooling Maintenance
+- SUBTASK: Resolve TypeScript deprecation diagnostics in project tsconfig files
+- COMPLETED_AT: 2026-04-13 16:16:07 +08
+- FILES_CHANGED: greenfn/tsconfig.json, greenfn-web/tsconfig.app.json, greenfn-web/tsconfig.json, LOG.md
+- CHANGE_SUMMARY: Addressed active TypeScript deprecation diagnostics by adding `ignoreDeprecations` controls to frontend tsconfig files and updating backend module settings to modern Node16 resolution in `greenfn/tsconfig.json`; verified resolved compiler config via `tsc --showConfig` and rechecked workspace diagnostics.
+
+### LOG-0037
+
+- TASK: Tooling Maintenance
+- SUBTASK: Resolve tsconfig.node baseUrl deprecation warning
+- COMPLETED_AT: 2026-04-13 16:17:57 +08
+- FILES_CHANGED: greenfn-web/tsconfig.node.json, LOG.md
+- CHANGE_SUMMARY: Fixed remaining TypeScript deprecation diagnostic in `greenfn-web/tsconfig.node.json` by adding `ignoreDeprecations: "6.0"` to compiler options and verified the file reports no errors in workspace diagnostics.
+
+### LOG-0038
+
+- TASK: Interaction History Implementation
+- SUBTASK: Frontend interaction entry form (type, date, notes)
+- COMPLETED_AT: 2026-04-13 16:20:33 +08
+- FILES_CHANGED: greenfn-web/src/pages/InteractionHistoryPage.tsx, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Added an Interaction History entry form on the frontend with interaction type selector, date-time input, and notes textarea, plus required-field validation and success/error feedback; successful submissions now insert a new entry into the selected contact timeline in chronological order, and the second Interaction History frontend checklist item was marked complete.
+
+### LOG-0039
+
+- TASK: Interaction History Implementation
+- SUBTASK: Frontend quick filters by interaction type and date range
+- COMPLETED_AT: 2026-04-13 16:43:05 +08
+- FILES_CHANGED: greenfn-web/src/pages/InteractionHistoryPage.tsx, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Added quick timeline filters for interaction type and start/end date range on the Interaction History page, including a reset action to restore full results; filter logic now narrows entries client-side after per-contact selection while preserving chronological ordering, and the third Interaction History frontend task was marked complete.
+
+### LOG-0040
+
+- TASK: Interaction History Implementation
+- SUBTASK: Frontend links from timeline entries to related next-step tasks
+- COMPLETED_AT: 2026-04-13 16:57:23 +08
+- FILES_CHANGED: greenfn-web/src/pages/InteractionHistoryPage.tsx, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Added related-task metadata to interaction timeline entries and rendered `View task` links for entries with associated next-step tasks, deep-linking to Today view using task/contact query parameters; marked the final Interaction History frontend checklist item as completed and updated review documentation.
+
+### LOG-0041
+
+- TASK: Interaction History Implementation
+- SUBTASK: Backend CRUD endpoints for interaction entries
+- COMPLETED_AT: 2026-04-13 17:07:29 +08
+- FILES_CHANGED: greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Replaced scaffolded interactions routes with functional CRUD endpoints (`POST /api/interactions`, `GET /api/interactions/:interactionId`, `PATCH /api/interactions/:interactionId`, `DELETE /api/interactions/:interactionId`) and a basic contact-scoped read list endpoint (`GET /api/interactions?contactId=...`), including advisor/contact ownership checks and request validation; verified route module loads successfully.
+
+### LOG-0042
+
+- TASK: Interaction History Implementation
+- SUBTASK: Backend list endpoint pagination and sorting by interaction date
+- COMPLETED_AT: 2026-04-13 17:26:54 +08
+- FILES_CHANGED: greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Enhanced `GET /api/interactions` to support pagination (`page`, `pageSize`) and interaction-date sorting (`sortDirection`) over `occurredAt`, returning pagination metadata and sort metadata while preserving advisor/contact scoping; verified route module loads and diagnostics pass.
+
+### LOG-0043
+
+- TASK: Team Workflow Governance
+- SUBTASK: Strengthen DB migration policy and add short-term parallel checklist
+- COMPLETED_AT: 2026-04-14 01:04:38 +08
+- FILES_CHANGED: .github/copilot-instructions.md, docs/prisma-workflow.md, LOG.md
+- CHANGE_SUMMARY: Added explicit compatibility-window and contract-gate rules, shared-table collision protocol, and contract cleanup cadence to `.github/copilot-instructions.md`; also added a concise short-term team checklist in `docs/prisma-workflow.md` for migration phase declaration, rebasing, compatibility expectations, reconciliation strategy, validation commands, and rollback planning.
+
+### LOG-0044
+
+- TASK: Interaction History Implementation
+- SUBTASK: Backend validation for interaction type/date and notes size limit
+- COMPLETED_AT: 2026-04-14 01:08:35 +08
+- FILES_CHANGED: greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Added explicit interaction payload validation helper for notes and enforced optional notes size limits (max 4000 characters) across create/update flows while preserving existing type/date validation; validated diagnostics and route module load, then marked the corresponding backend task complete.
+
+### LOG-0045
+
+- TASK: Interaction History Implementation
+- SUBTASK: Backend linkage support between interactions and generated summaries
+- COMPLETED_AT: 2026-04-14 01:10:32 +08
+- FILES_CHANGED: greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Added interaction-summary linkage support via `POST /api/interactions/:interactionId/summary-link` and `DELETE /api/interactions/:interactionId/summary-link`, including payload validation and structured summary metadata storage in `aiSummary`; extended mapped interaction payloads with parsed `aiSummaryLink` for consumer use and marked the final Interaction History backend task complete.
+
+### LOG-0046
+
+- TASK: Interaction History Implementation
+- SUBTASK: DB step 1 - link interactions to contacts and user
+- COMPLETED_AT: 2026-04-14 21:47:24 +08
+- FILES_CHANGED: greenfn/prisma/schema.prisma, greenfn/prisma/migrations/20260414214000_interaction_add_advisor_link/migration.sql, greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Added optional `advisorId` linkage from `Interaction` to `User` in Prisma schema, added an additive migration with backfill/index/foreign-key for advisor linkage, updated interactions route create/list/read scoping for direct advisor linkage with backward compatibility to existing records, and marked the first Interaction History DB checklist item complete.
+
 ### LOG-0047
 
-- TASK: Deployment Reliability
-- SUBTASK: Fix Railway Prisma client module resolution at runtime
-- COMPLETED_AT: 2026-04-14 21:03:48 +08
-- FILES_CHANGED: greenfn/src/lib/prisma.js, greenfn/prisma/seed.js, greenfn/prisma/schema.prisma, greenfn/package.json, LOG.md
-- CHANGE_SUMMARY: Replaced runtime and seed Prisma imports from custom generated paths to `@prisma/client`, removed custom Prisma generator output override so client generates to default package location, added `postinstall` generation via `npx prisma generate` for deployment installs, then validated successful local generation and backend startup.
+- TASK: Interaction History Implementation
+- SUBTASK: DB step 2 - add required interaction type enum categories
+- COMPLETED_AT: 2026-04-14 21:52:28 +08
+- FILES_CHANGED: greenfn/prisma/schema.prisma, greenfn/prisma/migrations/20260414220500_interaction_type_enum_add_required_values/migration.sql, greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Extended `InteractionType` with required categories (`WHATSAPP_DM`, `GENERAL_NOTE`) using an additive migration that preserves existing enum values, updated backend interaction type validation to accept the new categories while maintaining backward compatibility, validated Prisma schema/client generation and route module load, and marked the Interaction History DB enum checklist item complete.
 
 ### LOG-0048
 
-- TASK: Deployment Reliability
-- SUBTASK: Add dual-path Prisma client loading to prevent output path mismatch crashes
-- COMPLETED_AT: 2026-04-14 21:31:54 +08
-- FILES_CHANGED: greenfn/src/lib/prisma.js, greenfn/prisma/seed.js, LOG.md
-- CHANGE_SUMMARY: Added runtime/seed fallback imports that first try `@prisma/client` and then fall back to generated client paths, allowing service startup regardless of whether Prisma client generation targets default `.prisma` output or `generated/prisma`; validated backend boots successfully with current start command.
+- TASK: Interaction History Implementation
+- SUBTASK: DB step 3 - timeline consistency date fields verification
+- COMPLETED_AT: 2026-04-14 23:30:31 +08
+- FILES_CHANGED: TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Verified timeline consistency field coverage on `Interaction` (`occurredAt` interaction date plus `createdAt`), validated Prisma schema, recorded current migration-status caveat for local environments with unapplied migrations, and marked the corresponding Interaction History DB checklist item complete.
+
+### LOG-0049
+
+- TASK: Interaction History Implementation
+- SUBTASK: DB step 4 - optional AI summary foreign key linkage
+- COMPLETED_AT: 2026-04-15 04:05:33 +08
+- FILES_CHANGED: greenfn/prisma/schema.prisma, greenfn/prisma/migrations/20260415091500_interaction_add_ai_summary_fk/migration.sql, greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Added optional `Interaction.aiSummaryRecordId` foreign key linkage to new `AiSummary` records via additive Prisma schema and migration changes, updated interaction summary-link handling to create/update linked summary records while preserving legacy `aiSummary` compatibility, validated Prisma schema and client generation, and recorded current local migration-status blocker (`P1001` at `127.0.0.1:54322`) while marking the final Interaction History DB checklist item complete.
+
+### LOG-0050
+
+- TASK: Interaction History Implementation
+- SUBTASK: Deployment step 1 - timeline query performance verification
+- COMPLETED_AT: 2026-04-15 12:14:52 +08
+- FILES_CHANGED: greenfn/scripts/benchmark-interactions-timeline.js, greenfn/scripts/explain-interactions-timeline.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Verified timeline query performance against realistic local data volume (5,000 interactions on one contact) using reproducible benchmark and EXPLAIN scripts, confirmed index-backed query plan on `Interaction_contactId_occurredAt_idx`, recovered local migration execution state to apply pending schema migrations, and marked the first Interaction History deployment checklist item complete.
+
+### LOG-0051
+
+- TASK: Interaction History Implementation
+- SUBTASK: Deployment step 2 - interaction endpoint observability
+- COMPLETED_AT: 2026-04-15 12:20:17 +08
+- FILES_CHANGED: greenfn/src/modules/interactions/logging.js, greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Added structured observability telemetry for interaction read/write endpoints with event-level operation tags, latency/status metadata, and hashed identifiers; wired route-level operation context across list/read/create/update/delete/summary-link flows, validated route loading, and marked the Interaction History deployment observability task complete.
+
+### LOG-0052
+
+- TASK: Interaction History Implementation
+- SUBTASK: Deployment step 3 - migration validation for enum and relation changes
+- COMPLETED_AT: 2026-04-15 12:22:36 +08
+- FILES_CHANGED: TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Completed final deployment validation for Interaction History by confirming Prisma schema validity and up-to-date migration state, and by verifying required enum labels, foreign keys, and indexes for interaction enum/relation changes in the local database; marked the final Interaction History deployment checklist item complete.

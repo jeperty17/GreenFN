@@ -148,30 +148,30 @@
 
 ### FRONTEND
 
-- [ ] Build per-contact chronological timeline UI for interaction logs.
-- [ ] Build interaction entry form with type, date, and notes.
-- [ ] Add quick filters by interaction type and date range.
-- [ ] Add link from timeline entries to related next-step tasks.
+- [x] Build per-contact chronological timeline UI for interaction logs.
+- [x] Build interaction entry form with type, date, and notes.
+- [x] Add quick filters by interaction type and date range.
+- [x] Add link from timeline entries to related next-step tasks.
 
 ### BACKEND
 
-- [ ] Implement CRUD endpoints for interaction entries.
-- [ ] Implement list endpoint with pagination and sorting by interaction date.
-- [ ] Implement validation for interaction type/date and optional notes size limits.
-- [ ] Implement linkage support between interactions and generated summaries.
+- [x] Implement CRUD endpoints for interaction entries.
+- [x] Implement list endpoint with pagination and sorting by interaction date.
+- [x] Implement validation for interaction type/date and optional notes size limits.
+- [x] Implement linkage support between interactions and generated summaries.
 
 ### DB
 
-- [ ] Create interactions table linked to contacts and user.
-- [ ] Add enum for interaction type (Call, Meeting, WhatsApp/DM, General Note).
-- [ ] Add created-at and interaction-date fields for timeline consistency.
-- [ ] Add foreign key to optional AI summary record.
+- [x] Create interactions table linked to contacts and user.
+- [x] Add enum for interaction type (Call, Meeting, WhatsApp/DM, General Note).
+- [x] Add created-at and interaction-date fields for timeline consistency. //check this next time
+- [x] Add foreign key to optional AI summary record. //this as well
 
 ### DEPLOYMENT
 
-- [ ] Verify timeline query performance with realistic data volume.
-- [ ] Enable observability for interaction write/read endpoints.
-- [ ] Run migration validation for enum and relation changes.
+- [x] Verify timeline query performance with realistic data volume.
+- [x] Enable observability for interaction write/read endpoints.
+- [x] Run migration validation for enum and relation changes.
 
 ## AI Interaction Summaries
 
@@ -194,7 +194,7 @@
 - [ ] Create ai_summaries table linked to interactions and contacts.
 - [ ] Add fields for input mode, generated summary text, and model metadata.
 - [ ] Add retention policy fields and soft-delete support for privacy.
-- [ ] Add indexes for per-contact summary retrieval.
+- [ ] Add indexes for per-contact summary retrieval.nmbnv
 
 ### DEPLOYMENT
 
