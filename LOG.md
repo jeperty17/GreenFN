@@ -467,3 +467,27 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-04-15 12:22:36 +08
 - FILES_CHANGED: TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
 - CHANGE_SUMMARY: Completed final deployment validation for Interaction History by confirming Prisma schema validity and up-to-date migration state, and by verifying required enum labels, foreign keys, and indexes for interaction enum/relation changes in the local database; marked the final Interaction History deployment checklist item complete.
+
+### LOG-0053
+
+- TASK: Contacts Hub Implementation
+- SUBTASK: DB expansion and deployment hardening (API prefix + observability)
+- COMPLETED_AT: 2026-04-15 16:34:36 +0800
+- FILES_CHANGED: greenfn/prisma/schema.prisma, greenfn/prisma/migrations/20260414220500_interaction_type_enum_add_required_values/migration.sql, greenfn/prisma/migrations/20260415083321_contacts_hub_expand_source_category_metadata/migration.sql, greenfn/src/modules/contacts/routes.js, greenfn/src/modules/contacts/logging.js, greenfn/src/config/env.js, greenfn/src/app.js, greenfn/.env.example, TASKS.md, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Added additive Contacts Hub schema expansion (`ContactSourceCategory`, optional policy/life-priorities/portfolio fields, searchable indexes) and generated/applied migration `20260415083321_contacts_hub_expand_source_category_metadata`; fixed pre-existing Interaction migration shadow-db enum resolution so migration replay succeeds; added production-safe configurable API route prefixing via `API_BASE_PATH`; added structured contacts endpoint latency/error logging; validated with `prisma validate`, `prisma migrate status`, and `npm run prisma:seed`; marked Contacts DB checklist and first two Contacts deployment checklist items complete while keeping staging rollout check pending.
+
+### LOG-0054
+
+- TASK: Developer Experience
+- SUBTASK: Backend-only localhost internal validation console with feature flow buttons and CRUD traces
+- COMPLETED_AT: 2026-04-15 17:32:49 +0800
+- FILES_CHANGED: greenfn/src/lib/operationTracker.js, greenfn/src/middleware/operationRecorder.js, greenfn/src/modules/internal/routes.js, greenfn/src/app.js, REVIEW/INTERNAL_VALIDATION_CONSOLE.md, REVIEW/README.md, LOG.md
+- CHANGE_SUMMARY: Added a backend-only internal validation console at `/internal/validation` (non-production and localhost-restricted) with five feature buttons routing into live backend API flows and in-memory recent operation traces (CRUD, status, latency, path); added operation recorder middleware for API traffic, validated console and operations feed with local smoke checks, and documented reproducible validation steps in REVIEW.
+
+### LOG-0055
+
+- TASK: Developer Experience
+- SUBTASK: Restrict internal validation operation feed to Create/Update/Delete events only
+- COMPLETED_AT: 2026-04-15 17:44:16 +0800
+- FILES_CHANGED: greenfn/src/lib/operationTracker.js, REVIEW/INTERNAL_VALIDATION_CONSOLE.md, LOG.md
+- CHANGE_SUMMARY: Updated internal validation tracking to skip read-only requests (GET and other non-write methods) so the operations feed highlights only Create/Update/Delete events; revalidated behavior locally by confirming GET calls are excluded, POST calls are captured, and operations feed entries are C/U/D only.

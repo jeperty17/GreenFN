@@ -2,11 +2,31 @@ const express = require("express");
 const { validateBody, requiredString } = require("../../middleware/validate");
 const prisma = require("../../lib/prisma");
 const { httpError } = require("../../utils/httpError");
+const { logContactsRequestMetrics } = require("./logging");
 
 const router = express.Router();
 
 const CONTACT_TYPES = new Set(["LEAD", "CLIENT"]);
+const SOURCE_CATEGORIES = new Set([
+  "REFERRAL",
+  "COLD_CALL",
+  "SOCIAL_MEDIA",
+  "EVENT",
+  "WEBSITE",
+  "OTHER",
+]);
 const CONTACT_META_MARKER = "greenfn-contact-meta-v1";
+
+router.use((req, res, next) => {
+  const start = process.hrtime.bigint();
+
+  res.on("finish", () => {
+    const durationMs = Number(process.hrtime.bigint() - start) / 1_000_000;
+    logContactsRequestMetrics(req, res, durationMs);
+  });
+
+  next();
+});
 
 function parsePositiveInt(value, fallbackValue) {
   const parsed = Number.parseInt(String(value || ""), 10);
@@ -48,6 +68,86 @@ function normalizeOptionalString(value) {
   const normalizedValue = value.trim();
 
   return normalizedValue.length > 0 ? normalizedValue : null;
+}
+
+function normalizeSourceCategory(value) {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null || value === "") {
+    return null;
+  }
+
+  if (typeof value !== "string") {
+    return undefined;
+  }
+
+  const normalizedValue = value
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+  if (!normalizedValue) {
+    return null;
+  }
+
+  return SOURCE_CATEGORIES.has(normalizedValue) ? normalizedValue : undefined;
+}
+
+function inferSourceCategoryFromSource(source) {
+  const normalizedSource = normalizeOptionalString(source);
+
+  if (!normalizedSource) {
+    return null;
+  }
+
+  const loweredSource = normalizedSource.toLowerCase();
+
+  if (loweredSource.includes("referral")) {
+    return "REFERRAL";
+  }
+
+  if (loweredSource.includes("cold")) {
+    return "COLD_CALL";
+  }
+
+  if (
+    loweredSource.includes("instagram") ||
+    loweredSource.includes("telegram") ||
+    loweredSource.includes("whatsapp") ||
+    loweredSource.includes("social")
+  ) {
+    return "SOCIAL_MEDIA";
+  }
+
+  if (loweredSource.includes("event") || loweredSource.includes("seminar")) {
+    return "EVENT";
+  }
+
+  if (loweredSource.includes("website") || loweredSource.includes("web")) {
+    return "WEBSITE";
+  }
+
+  return "OTHER";
+}
+
+function normalizePolicyMetadata(value, errors, fieldName = "policyMetadata") {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  if (value === null) {
+    return null;
+  }
+
+  if (typeof value === "object" && !Array.isArray(value)) {
+    return value;
+  }
+
+  errors.push({ field: fieldName, message: `${fieldName} must be an object` });
+  return undefined;
 }
 
 function parseBirthday(value, fieldName, errors) {
@@ -129,12 +229,14 @@ function mapContact(contact) {
     email: contact.email,
     phone: contact.phone,
     source: contact.source,
+    sourceCategory: contact.sourceCategory || null,
     type: contact.type,
     birthday: contact.birthday
       ? contact.birthday.toISOString().slice(0, 10)
       : null,
-    priorities: meta.priorities,
-    portfolioSummary: meta.portfolioSummary,
+    priorities: contact.lifePriorities || meta.priorities,
+    portfolioSummary: contact.portfolioSummary || meta.portfolioSummary,
+    policyMetadata: contact.policyMetadata || null,
     isStarred: contact.isStarred,
     tags: Array.isArray(contact.tags)
       ? contact.tags.map((contactTag) => contactTag.tag)
@@ -157,6 +259,24 @@ function validateType(type, errors, fieldName = "type") {
     errors.push({
       field: fieldName,
       message: `${fieldName} must be LEAD or CLIENT`,
+    });
+  }
+}
+
+function validateSourceCategory(sourceCategory, errors, fieldName = "sourceCategory") {
+  if (sourceCategory === undefined || sourceCategory === null || sourceCategory === "") {
+    return;
+  }
+
+  if (typeof sourceCategory !== "string") {
+    errors.push({ field: fieldName, message: `${fieldName} must be a string` });
+    return;
+  }
+
+  if (!normalizeSourceCategory(sourceCategory)) {
+    errors.push({
+      field: fieldName,
+      message: `${fieldName} must be one of ${Array.from(SOURCE_CATEGORIES).join(", ")}`,
     });
   }
 }
@@ -194,9 +314,11 @@ function validateCreateContact(body) {
   validateOptionalStringField(body, "email", errors);
   validateOptionalStringField(body, "phone", errors);
   validateOptionalStringField(body, "source", errors);
+  validateSourceCategory(body.sourceCategory, errors);
   validateOptionalStringField(body, "birthday", errors);
   validateOptionalStringField(body, "priorities", errors);
   validateOptionalStringField(body, "portfolioSummary", errors);
+  normalizePolicyMetadata(body.policyMetadata, errors);
 
   if (body.isStarred !== undefined && typeof body.isStarred !== "boolean") {
     errors.push({ field: "isStarred", message: "isStarred must be a boolean" });
@@ -236,9 +358,11 @@ function validateUpdateContact(body) {
   validateOptionalStringField(body, "email", errors);
   validateOptionalStringField(body, "phone", errors);
   validateOptionalStringField(body, "source", errors);
+  validateSourceCategory(body.sourceCategory, errors);
   validateOptionalStringField(body, "birthday", errors);
   validateOptionalStringField(body, "priorities", errors);
   validateOptionalStringField(body, "portfolioSummary", errors);
+  normalizePolicyMetadata(body.policyMetadata, errors);
 
   if (body.isStarred !== undefined && typeof body.isStarred !== "boolean") {
     errors.push({ field: "isStarred", message: "isStarred must be a boolean" });
@@ -326,6 +450,7 @@ router.get("/", async (req, res, next) => {
   try {
     const search = String(req.query.search || "").trim();
     const source = String(req.query.source || "").trim();
+    const sourceCategory = normalizeSourceCategory(req.query.sourceCategory);
     const tag = String(req.query.tag || "").trim();
     const type = String(req.query.type || "")
       .trim()
@@ -354,6 +479,10 @@ router.get("/", async (req, res, next) => {
 
     if (source) {
       andFilters.push({ source: { contains: source, mode: "insensitive" } });
+    }
+
+    if (sourceCategory) {
+      andFilters.push({ sourceCategory });
     }
 
     if (tag) {
@@ -411,6 +540,7 @@ router.get("/", async (req, res, next) => {
         search,
         type: CONTACT_TYPES.has(type) ? type : null,
         source,
+        sourceCategory,
         tag,
         starred,
       },
@@ -509,6 +639,11 @@ router.post(
         .toUpperCase();
       const fullName = req.body.fullName.trim();
       const birthday = parseBirthday(req.body.birthday, "birthday", []);
+      const source = normalizeOptionalString(req.body.source);
+      const sourceCategory =
+        normalizeSourceCategory(req.body.sourceCategory) ||
+        inferSourceCategoryFromSource(source);
+      const policyMetadata = normalizePolicyMetadata(req.body.policyMetadata, []);
 
       if (!fullName) {
         throw httpError(400, "Validation failed", [
@@ -523,9 +658,13 @@ router.post(
           type: CONTACT_TYPES.has(type) ? type : "LEAD",
           email: normalizeOptionalString(req.body.email),
           phone: normalizeOptionalString(req.body.phone),
-          source: normalizeOptionalString(req.body.source),
+          source,
+          sourceCategory,
           birthday,
           isStarred: req.body.isStarred === true,
+          lifePriorities: normalizeOptionalString(req.body.priorities),
+          portfolioSummary: normalizeOptionalString(req.body.portfolioSummary),
+          policyMetadata,
           notes: buildNotesFromMeta(
             {
               priorities: req.body.priorities,
@@ -603,7 +742,16 @@ router.patch(
       }
 
       if (req.body.source !== undefined) {
-        updatedPayload.source = normalizeOptionalString(req.body.source);
+        const source = normalizeOptionalString(req.body.source);
+        updatedPayload.source = source;
+
+        if (req.body.sourceCategory === undefined) {
+          updatedPayload.sourceCategory = inferSourceCategoryFromSource(source);
+        }
+      }
+
+      if (req.body.sourceCategory !== undefined) {
+        updatedPayload.sourceCategory = normalizeSourceCategory(req.body.sourceCategory);
       }
 
       if (req.body.birthday !== undefined) {
@@ -622,6 +770,14 @@ router.patch(
         req.body.priorities !== undefined ||
         req.body.portfolioSummary !== undefined
       ) {
+        if (req.body.priorities !== undefined) {
+          updatedPayload.lifePriorities = normalizeOptionalString(req.body.priorities);
+        }
+
+        if (req.body.portfolioSummary !== undefined) {
+          updatedPayload.portfolioSummary = normalizeOptionalString(req.body.portfolioSummary);
+        }
+
         updatedPayload.notes = buildNotesFromMeta(
           {
             priorities: req.body.priorities,
@@ -629,6 +785,10 @@ router.patch(
           },
           existingContact.notes,
         );
+      }
+
+      if (req.body.policyMetadata !== undefined) {
+        updatedPayload.policyMetadata = normalizePolicyMetadata(req.body.policyMetadata, []);
       }
 
       if (req.body.tagNames !== undefined) {

@@ -5,7 +5,7 @@ BEGIN
     SELECT 1
     FROM pg_enum
     WHERE enumlabel = 'WHATSAPP_DM'
-      AND enumtypid = 'InteractionType'::regtype
+      AND enumtypid = to_regtype('"InteractionType"')
   ) THEN
     ALTER TYPE "InteractionType" ADD VALUE 'WHATSAPP_DM';
   END IF;
@@ -14,7 +14,7 @@ BEGIN
     SELECT 1
     FROM pg_enum
     WHERE enumlabel = 'GENERAL_NOTE'
-      AND enumtypid = 'InteractionType'::regtype
+      AND enumtypid = to_regtype('"InteractionType"')
   ) THEN
     ALTER TYPE "InteractionType" ADD VALUE 'GENERAL_NOTE';
   END IF;

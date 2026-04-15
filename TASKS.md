@@ -75,15 +75,15 @@
 
 ### DB
 
-- [ ] Create tables/models for users, contacts, tags, and contact-tag mappings.
-- [ ] Add enums for contact type (Lead/Client) and source categories.
-- [ ] Add indexes for searchable fields (name, email, phone, source).
-- [ ] Add nullable fields for optional portfolio/policy metadata and life priorities.
+- [x] Create tables/models for users, contacts, tags, and contact-tag mappings.
+- [x] Add enums for contact type (Lead/Client) and source categories.
+- [x] Add indexes for searchable fields (name, email, phone, source).
+- [x] Add nullable fields for optional portfolio/policy metadata and life priorities.
 
 ### DEPLOYMENT
 
-- [ ] Configure production-safe API route prefixing for contacts endpoints.
-- [ ] Add monitoring for contacts API latency and error rates.
+- [x] Configure production-safe API route prefixing for contacts endpoints.
+- [x] Add monitoring for contacts API latency and error rates.
 - [ ] Run migration and seed checks in staging before production rollout.
 
 ## Leads Pipeline

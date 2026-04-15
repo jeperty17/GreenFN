@@ -21,6 +21,15 @@ const readOptionalEnv = (name, fallbackValue = '') => {
 const PORT = Number(process.env.PORT || 3000)
 const NODE_ENV = process.env.NODE_ENV || 'development'
 
+function normalizeApiBasePath(value) {
+  const rawValue = String(value || '/api').trim()
+  const withLeadingSlash = rawValue.startsWith('/') ? rawValue : `/${rawValue}`
+  const normalizedPath = withLeadingSlash.replace(/\/+$/, '')
+  return normalizedPath.length > 0 ? normalizedPath : '/api'
+}
+
+const API_BASE_PATH = normalizeApiBasePath(readOptionalEnv('API_BASE_PATH', '/api'))
+
 const DATABASE_URL = readRequiredEnv('DATABASE_URL')
 const DIRECT_URL = readRequiredEnv('DIRECT_URL')
 
@@ -48,6 +57,7 @@ function requireOpenAIApiKey() {
 module.exports = {
   PORT,
   NODE_ENV,
+  API_BASE_PATH,
   DATABASE_URL,
   DIRECT_URL,
   AI_PROVIDER,
