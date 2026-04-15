@@ -28,8 +28,9 @@ model Contact {
 
   type ContactType @default(LEAD)
 
-  stageId String?
-  stage   PipelineStage? @relation(fields: [stageId], references: [id])
+  stageId        String?
+  stage          PipelineStage? @relation(fields: [stageId], references: [id])
+  stageUpdatedAt DateTime? // set when the contact is moved to a new stage
 
   fullName String
   phone    String?

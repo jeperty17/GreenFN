@@ -3,3 +3,7 @@ node_modules
 .env
 
 /generated/prisma
+.DS_Store
+
+CLAUDE.md
+REQUIREMENTS.md
