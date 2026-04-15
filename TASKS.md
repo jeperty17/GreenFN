@@ -162,16 +162,16 @@
 
 ### DB
 
-- [ ] Create interactions table linked to contacts and user.
-- [ ] Add enum for interaction type (Call, Meeting, WhatsApp/DM, General Note).
-- [ ] Add created-at and interaction-date fields for timeline consistency.
-- [ ] Add foreign key to optional AI summary record.
+- [x] Create interactions table linked to contacts and user.
+- [x] Add enum for interaction type (Call, Meeting, WhatsApp/DM, General Note).
+- [x] Add created-at and interaction-date fields for timeline consistency. //check this next time
+- [x] Add foreign key to optional AI summary record. //this as well
 
 ### DEPLOYMENT
 
-- [ ] Verify timeline query performance with realistic data volume.
-- [ ] Enable observability for interaction write/read endpoints.
-- [ ] Run migration validation for enum and relation changes.
+- [x] Verify timeline query performance with realistic data volume.
+- [x] Enable observability for interaction write/read endpoints.
+- [x] Run migration validation for enum and relation changes.
 
 ## AI Interaction Summaries
 
@@ -194,7 +194,7 @@
 - [ ] Create ai_summaries table linked to interactions and contacts.
 - [ ] Add fields for input mode, generated summary text, and model metadata.
 - [ ] Add retention policy fields and soft-delete support for privacy.
-- [ ] Add indexes for per-contact summary retrieval.
+- [ ] Add indexes for per-contact summary retrieval.nmbnv
 
 ### DEPLOYMENT
 

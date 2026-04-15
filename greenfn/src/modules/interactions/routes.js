@@ -2,6 +2,7 @@ const express = require("express");
 const { validateBody, requiredString } = require("../../middleware/validate");
 const prisma = require("../../lib/prisma");
 const { httpError } = require("../../utils/httpError");
+const { logInteractionEvent, toStatusLevel } = require("./logging");
 
 const router = express.Router();
 
@@ -9,16 +10,19 @@ const INTERACTION_TYPES = new Set([
   "CALL",
   "MEETING",
   "WHATSAPP",
+  "WHATSAPP_DM",
   "TELEGRAM",
   "INSTAGRAM",
   "EMAIL",
   "NOTE",
+  "GENERAL_NOTE",
 ]);
 const INTERACTION_NOTES_MAX_LENGTH = 4000;
 const AI_SUMMARY_MARKER = "greenfn-ai-summary-v1";
 const AI_SUMMARY_TEXT_MAX_LENGTH = 6000;
 const AI_SUMMARY_MODEL_MAX_LENGTH = 120;
 const AI_SUMMARY_SOURCE_MODE_MAX_LENGTH = 80;
+const OBSERVABLE_METHODS = new Set(["GET", "POST", "PATCH", "DELETE"]);
 
 function parsePositiveInt(value, fallbackValue) {
   const parsed = Number.parseInt(String(value || ""), 10);
@@ -196,6 +200,17 @@ function buildStoredSummaryLink(body) {
   });
 }
 
+function buildSummaryRecordData(body) {
+  const generatedAt = parseOptionalIsoDate(body.generatedAt, "generatedAt", []);
+
+  return {
+    summaryText: body.summaryText.trim(),
+    model: normalizeOptionalString(body.model),
+    sourceMode: normalizeOptionalString(body.sourceMode),
+    generatedAt: generatedAt || new Date(),
+  };
+}
+
 function parseSummaryLink(aiSummary) {
   if (!aiSummary || typeof aiSummary !== "string") {
     return null;
@@ -226,6 +241,21 @@ function parseSummaryLink(aiSummary) {
       generatedAt: null,
     };
   }
+}
+
+function mapSummaryFromRecord(aiSummaryRecord) {
+  if (!aiSummaryRecord) {
+    return null;
+  }
+
+  return {
+    summaryText: aiSummaryRecord.summaryText,
+    model: aiSummaryRecord.model,
+    sourceMode: aiSummaryRecord.sourceMode,
+    generatedAt: aiSummaryRecord.generatedAt
+      ? aiSummaryRecord.generatedAt.toISOString()
+      : null,
+  };
 }
 
 function validateCreateInteraction(body) {
@@ -296,15 +326,22 @@ async function resolveAdvisorInteraction(interactionId, advisorId) {
   const interaction = await prisma.interaction.findFirst({
     where: {
       id: interactionId,
-      contact: {
-        advisorId,
-      },
+      OR: [{ advisorId }, { contact: { advisorId } }],
     },
     include: {
       contact: {
         select: {
           id: true,
           fullName: true,
+        },
+      },
+      aiSummaryRecord: {
+        select: {
+          id: true,
+          summaryText: true,
+          model: true,
+          sourceMode: true,
+          generatedAt: true,
         },
       },
     },
@@ -321,18 +358,65 @@ async function resolveAdvisorInteraction(interactionId, advisorId) {
 }
 
 function mapInteraction(interaction) {
+  const summaryFromRecord = mapSummaryFromRecord(interaction.aiSummaryRecord);
+
   return {
     id: interaction.id,
     contactId: interaction.contactId,
+    advisorId: interaction.advisorId || null,
+    aiSummaryRecordId: interaction.aiSummaryRecordId || null,
     contactName: interaction.contact?.fullName || null,
     type: interaction.type,
     occurredAt: interaction.occurredAt,
     notes: interaction.notes,
     aiSummary: interaction.aiSummary,
-    aiSummaryLink: parseSummaryLink(interaction.aiSummary),
+    aiSummaryLink: summaryFromRecord || parseSummaryLink(interaction.aiSummary),
     createdAt: interaction.createdAt,
   };
 }
+
+function setInteractionObservation(res, operation, metadata = {}) {
+  res.locals.interactionObservation = {
+    operation,
+    ...metadata,
+  };
+}
+
+router.use((req, res, next) => {
+  if (!OBSERVABLE_METHODS.has(req.method)) {
+    next();
+    return;
+  }
+
+  const startedAt = process.hrtime.bigint();
+
+  res.on("finish", () => {
+    const observation = res.locals.interactionObservation || {};
+    const durationMs = Number(process.hrtime.bigint() - startedAt) / 1_000_000;
+    const statusCode = res.statusCode;
+
+    logInteractionEvent(toStatusLevel(statusCode), "interaction.endpoint", {
+      method: req.method,
+      path: req.baseUrl + req.path,
+      operation:
+        observation.operation ||
+        `${req.method.toLowerCase()}-${req.path.replace(/[/:]/g, "_")}`,
+      endpointType: req.method === "GET" ? "read" : "write",
+      statusCode,
+      durationMs,
+      itemCount: observation.itemCount,
+      total: observation.total,
+      page: observation.page,
+      pageSize: observation.pageSize,
+      sortDirection: observation.sortDirection,
+      advisorId: observation.advisorId,
+      contactId: observation.contactId,
+      interactionId: observation.interactionId,
+    });
+  });
+
+  next();
+});
 
 router.get("/", async (req, res, next) => {
   try {
@@ -351,7 +435,10 @@ router.get("/", async (req, res, next) => {
 
     await resolveAdvisorContact(contactId, advisorId);
 
-    const where = { contactId };
+    const where = {
+      contactId,
+      OR: [{ advisorId }, { contact: { advisorId } }],
+    };
 
     const [items, total] = await Promise.all([
       prisma.interaction.findMany({
@@ -366,12 +453,31 @@ router.get("/", async (req, res, next) => {
               fullName: true,
             },
           },
+          aiSummaryRecord: {
+            select: {
+              id: true,
+              summaryText: true,
+              model: true,
+              sourceMode: true,
+              generatedAt: true,
+            },
+          },
         },
       }),
       prisma.interaction.count({ where }),
     ]);
 
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
+
+    setInteractionObservation(res, "list-interactions", {
+      advisorId,
+      contactId,
+      itemCount: items.length,
+      total,
+      page,
+      pageSize,
+      sortDirection,
+    });
 
     res.json({
       items: items.map(mapInteraction),
@@ -400,6 +506,13 @@ router.get("/:interactionId", async (req, res, next) => {
       req.params.interactionId,
       advisorId,
     );
+
+    setInteractionObservation(res, "get-interaction", {
+      advisorId,
+      contactId: item.contactId,
+      interactionId: item.id,
+    });
+
     res.json({ item: mapInteraction(item) });
   } catch (error) {
     next(error);
@@ -421,6 +534,9 @@ router.post(
         where: { id: existing.id },
         data: {
           aiSummary: buildStoredSummaryLink(req.body),
+          aiSummaryRecord: existing.aiSummaryRecordId
+            ? { update: buildSummaryRecordData(req.body) }
+            : { create: buildSummaryRecordData(req.body) },
         },
         include: {
           contact: {
@@ -429,7 +545,22 @@ router.post(
               fullName: true,
             },
           },
+          aiSummaryRecord: {
+            select: {
+              id: true,
+              summaryText: true,
+              model: true,
+              sourceMode: true,
+              generatedAt: true,
+            },
+          },
         },
+      });
+
+      setInteractionObservation(res, "link-summary", {
+        advisorId,
+        contactId: updated.contactId,
+        interactionId: updated.id,
       });
 
       res.status(200).json({ item: mapInteraction(updated) });
@@ -451,7 +582,14 @@ router.delete("/:interactionId/summary-link", async (req, res, next) => {
       where: { id: existing.id },
       data: {
         aiSummary: null,
+        aiSummaryRecordId: null,
       },
+    });
+
+    setInteractionObservation(res, "unlink-summary", {
+      advisorId,
+      contactId: existing.contactId,
+      interactionId: existing.id,
     });
 
     res.status(204).send();
@@ -480,6 +618,7 @@ router.post(
       const created = await prisma.interaction.create({
         data: {
           contactId: req.body.contactId,
+          advisorId,
           type: String(req.body.type).trim().toUpperCase(),
           occurredAt,
           notes: normalizeOptionalString(req.body.notes),
@@ -491,7 +630,22 @@ router.post(
               fullName: true,
             },
           },
+          aiSummaryRecord: {
+            select: {
+              id: true,
+              summaryText: true,
+              model: true,
+              sourceMode: true,
+              generatedAt: true,
+            },
+          },
         },
+      });
+
+      setInteractionObservation(res, "create-interaction", {
+        advisorId,
+        contactId: created.contactId,
+        interactionId: created.id,
       });
 
       res.status(201).json({ item: mapInteraction(created) });
@@ -543,7 +697,22 @@ router.patch(
               fullName: true,
             },
           },
+          aiSummaryRecord: {
+            select: {
+              id: true,
+              summaryText: true,
+              model: true,
+              sourceMode: true,
+              generatedAt: true,
+            },
+          },
         },
+      });
+
+      setInteractionObservation(res, "update-interaction", {
+        advisorId,
+        contactId: updated.contactId,
+        interactionId: updated.id,
       });
 
       res.json({ item: mapInteraction(updated) });
@@ -563,6 +732,12 @@ router.delete("/:interactionId", async (req, res, next) => {
 
     await prisma.interaction.delete({
       where: { id: existing.id },
+    });
+
+    setInteractionObservation(res, "delete-interaction", {
+      advisorId,
+      contactId: existing.contactId,
+      interactionId: existing.id,
     });
 
     res.status(204).send();

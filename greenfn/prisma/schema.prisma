@@ -13,6 +13,7 @@ model User {
   name   String?
 
   contacts  Contact[]
+  interactions Interaction[]
   stages    PipelineStage[]
   tags      Tag[]
   templates MessageTemplate[]
@@ -84,6 +85,10 @@ model Interaction {
   id        String  @id @default(cuid())
   contactId String
   contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  advisorId String?
+  advisor   User?   @relation(fields: [advisorId], references: [id], onDelete: SetNull)
+  aiSummaryRecordId String?
+  aiSummaryRecord   AiSummary? @relation(fields: [aiSummaryRecordId], references: [id], onDelete: SetNull)
 
   type       InteractionType
   occurredAt DateTime        @default(now())
@@ -95,6 +100,21 @@ model Interaction {
   createdAt DateTime @default(now())
 
   @@index([contactId, occurredAt])
+  @@index([advisorId])
+  @@index([aiSummaryRecordId])
+}
+
+model AiSummary {
+  id String @id @default(cuid())
+
+  summaryText String
+  model       String?
+  sourceMode  String?
+  generatedAt DateTime @default(now())
+
+  interactions Interaction[]
+
+  createdAt DateTime @default(now())
 }
 
 model NextStep {
@@ -255,10 +275,12 @@ enum InteractionType {
   CALL
   MEETING
   WHATSAPP
+  WHATSAPP_DM
   TELEGRAM
   INSTAGRAM
   EMAIL
   NOTE
+  GENERAL_NOTE
 }
 
 enum TaskStatus {

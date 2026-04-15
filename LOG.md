@@ -403,3 +403,59 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-04-14 01:10:32 +08
 - FILES_CHANGED: greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
 - CHANGE_SUMMARY: Added interaction-summary linkage support via `POST /api/interactions/:interactionId/summary-link` and `DELETE /api/interactions/:interactionId/summary-link`, including payload validation and structured summary metadata storage in `aiSummary`; extended mapped interaction payloads with parsed `aiSummaryLink` for consumer use and marked the final Interaction History backend task complete.
+
+### LOG-0046
+
+- TASK: Interaction History Implementation
+- SUBTASK: DB step 1 - link interactions to contacts and user
+- COMPLETED_AT: 2026-04-14 21:47:24 +08
+- FILES_CHANGED: greenfn/prisma/schema.prisma, greenfn/prisma/migrations/20260414214000_interaction_add_advisor_link/migration.sql, greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Added optional `advisorId` linkage from `Interaction` to `User` in Prisma schema, added an additive migration with backfill/index/foreign-key for advisor linkage, updated interactions route create/list/read scoping for direct advisor linkage with backward compatibility to existing records, and marked the first Interaction History DB checklist item complete.
+
+### LOG-0047
+
+- TASK: Interaction History Implementation
+- SUBTASK: DB step 2 - add required interaction type enum categories
+- COMPLETED_AT: 2026-04-14 21:52:28 +08
+- FILES_CHANGED: greenfn/prisma/schema.prisma, greenfn/prisma/migrations/20260414220500_interaction_type_enum_add_required_values/migration.sql, greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Extended `InteractionType` with required categories (`WHATSAPP_DM`, `GENERAL_NOTE`) using an additive migration that preserves existing enum values, updated backend interaction type validation to accept the new categories while maintaining backward compatibility, validated Prisma schema/client generation and route module load, and marked the Interaction History DB enum checklist item complete.
+
+### LOG-0048
+
+- TASK: Interaction History Implementation
+- SUBTASK: DB step 3 - timeline consistency date fields verification
+- COMPLETED_AT: 2026-04-14 23:30:31 +08
+- FILES_CHANGED: TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Verified timeline consistency field coverage on `Interaction` (`occurredAt` interaction date plus `createdAt`), validated Prisma schema, recorded current migration-status caveat for local environments with unapplied migrations, and marked the corresponding Interaction History DB checklist item complete.
+
+### LOG-0049
+
+- TASK: Interaction History Implementation
+- SUBTASK: DB step 4 - optional AI summary foreign key linkage
+- COMPLETED_AT: 2026-04-15 04:05:33 +08
+- FILES_CHANGED: greenfn/prisma/schema.prisma, greenfn/prisma/migrations/20260415091500_interaction_add_ai_summary_fk/migration.sql, greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Added optional `Interaction.aiSummaryRecordId` foreign key linkage to new `AiSummary` records via additive Prisma schema and migration changes, updated interaction summary-link handling to create/update linked summary records while preserving legacy `aiSummary` compatibility, validated Prisma schema and client generation, and recorded current local migration-status blocker (`P1001` at `127.0.0.1:54322`) while marking the final Interaction History DB checklist item complete.
+
+### LOG-0050
+
+- TASK: Interaction History Implementation
+- SUBTASK: Deployment step 1 - timeline query performance verification
+- COMPLETED_AT: 2026-04-15 12:14:52 +08
+- FILES_CHANGED: greenfn/scripts/benchmark-interactions-timeline.js, greenfn/scripts/explain-interactions-timeline.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Verified timeline query performance against realistic local data volume (5,000 interactions on one contact) using reproducible benchmark and EXPLAIN scripts, confirmed index-backed query plan on `Interaction_contactId_occurredAt_idx`, recovered local migration execution state to apply pending schema migrations, and marked the first Interaction History deployment checklist item complete.
+
+### LOG-0051
+
+- TASK: Interaction History Implementation
+- SUBTASK: Deployment step 2 - interaction endpoint observability
+- COMPLETED_AT: 2026-04-15 12:20:17 +08
+- FILES_CHANGED: greenfn/src/modules/interactions/logging.js, greenfn/src/modules/interactions/routes.js, TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Added structured observability telemetry for interaction read/write endpoints with event-level operation tags, latency/status metadata, and hashed identifiers; wired route-level operation context across list/read/create/update/delete/summary-link flows, validated route loading, and marked the Interaction History deployment observability task complete.
+
+### LOG-0052
+
+- TASK: Interaction History Implementation
+- SUBTASK: Deployment step 3 - migration validation for enum and relation changes
+- COMPLETED_AT: 2026-04-15 12:22:36 +08
+- FILES_CHANGED: TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
+- CHANGE_SUMMARY: Completed final deployment validation for Interaction History by confirming Prisma schema validity and up-to-date migration state, and by verifying required enum labels, foreign keys, and indexes for interaction enum/relation changes in the local database; marked the final Interaction History deployment checklist item complete.
