@@ -459,3 +459,19 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-04-15 12:22:36 +08
 - FILES_CHANGED: TASKS.md, REVIEW/INTERACTION_HISTORY.md, LOG.md
 - CHANGE_SUMMARY: Completed final deployment validation for Interaction History by confirming Prisma schema validity and up-to-date migration state, and by verifying required enum labels, foreign keys, and indexes for interaction enum/relation changes in the local database; marked the final Interaction History deployment checklist item complete.
+
+### LOG-0053
+
+- TASK: AI Interaction Summaries Implementation
+- SUBTASK: FRONTEND step 1 - build structured post-interaction questionnaire form
+- COMPLETED_AT: 2026-04-15 12:25:14 +08
+- FILES_CHANGED: greenfn-web/src/components/PostInteractionQuestionnaireForm.tsx, greenfn-web/src/pages/AISummaryPage.tsx, greenfn-web/tsconfig.app.json, greenfn-web/tsconfig.node.json, TASKS.md, REVIEW/AI_INTERACTION_SUMMARIES.md, LOG.md
+- CHANGE_SUMMARY: Created a reusable `PostInteractionQuestionnaireForm` component with 4 input modes (Structured Fields, Pasted Meeting Summary, Unstructured Notes, Chat Transcript) for flexible interaction capture; integrated form into `AISummaryPage.tsx` with contact selection and mode-specific UI rendering; added form validation, state management, and submit callback support; removed problematic ignoreDeprecations from frontend tsconfig files; verified TypeScript build passes with `npm run build`; and marked the first AI Interaction Summaries frontend task complete.
+
+### LOG-0054
+
+- TASK: Tooling Maintenance
+- SUBTASK: Fix TypeScript deprecation error in frontend tsconfig
+- COMPLETED_AT: 2026-04-15 23:11:50 +08
+- FILES_CHANGED: greenfn-web/tsconfig.app.json, greenfn-web/tsconfig.node.json, LOG.md
+- CHANGE_SUMMARY: Resolved VS Code TypeScript diagnostics error for deprecated `baseUrl` by removing `baseUrl` from frontend tsconfig files while retaining path aliases via `paths`; validated both editor diagnostics (no errors in tsconfig files) and build output (`npm run build` passes).

@@ -177,7 +177,7 @@
 
 ### FRONTEND
 
-- [ ] Build structured post-interaction questionnaire form.
+- [x] Build structured post-interaction questionnaire form.
 - [ ] Add alternative input modes for pasted meeting summary, unstructured notes, or pasted chat transcript.
 - [ ] Build summary preview and edit-before-save workflow.
 - [ ] Add explicit user controls to skip AI generation when not needed.
