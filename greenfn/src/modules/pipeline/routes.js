@@ -5,52 +5,94 @@ const { validateBody, requiredString } = require("../../middleware/validate");
 
 const router = express.Router();
 
-// Hard-coded until auth is implemented
-const ADVISOR_ID = "seed-user-001";
+const DEFAULT_ADVISOR_ID = "seed-user-001";
+
+function getAdvisorId(req) {
+  return req.authUser?.id || DEFAULT_ADVISOR_ID;
+}
 
 // GET /api/pipeline
 // Returns all PipelineStages for the advisor in order, each with their contacts.
 // Each contact includes openTaskCount (OPEN NextSteps) and lastInteractionAt.
-router.get("/", async (_req, res, next) => {
+router.get("/", async (req, res, next) => {
   try {
+    const advisorId = getAdvisorId(req);
     const stages = await prisma.pipelineStage.findMany({
-      where: { advisorId: ADVISOR_ID },
-      orderBy: { order: "asc" }, // user defined order for pipeline stages (eg 0 = "New Lead", 1 = "Contacted", etc)
-      include: {
-        contacts: {
-          select: {
-            id: true,
-            fullName: true,
-            type: true,
-            source: true,
-            stageId: true,
-            // count only open tasks for the task badge on each card
-            _count: {
-              select: { nextSteps: { where: { status: "OPEN" } } },
-            },
-            // most recent interaction for the "N days ago" badge
-            interactions: {
-              select: { occurredAt: true },
-              orderBy: { occurredAt: "desc" },
-              take: 1,
-            },
-          },
-        },
-      },
+      where: { advisorId },
+      orderBy: { order: "asc" },
+      select: { id: true, advisorId: true, name: true, order: true },
     });
 
-    // Flatten _count and interaction into top-level fields for the frontend
+    const stageIds = stages.map((stage) => stage.id);
+    const contacts =
+      stageIds.length > 0
+        ? await prisma.contact.findMany({
+            where: {
+              advisorId,
+              stageId: { in: stageIds },
+            },
+            select: {
+              id: true,
+              fullName: true,
+              type: true,
+              source: true,
+              stageId: true,
+            },
+          })
+        : [];
+
+    const contactIds = contacts.map((contact) => contact.id);
+    const taskCounts =
+      contactIds.length > 0
+        ? await prisma.nextStep.groupBy({
+            by: ["contactId"],
+            where: {
+              contactId: { in: contactIds },
+              status: "OPEN",
+            },
+            _count: { _all: true },
+          })
+        : [];
+    const taskCountByContactId = new Map(
+      taskCounts.map((item) => [item.contactId, item._count._all]),
+    );
+
+    const interactions =
+      contactIds.length > 0
+        ? await prisma.interaction.findMany({
+            where: { contactId: { in: contactIds } },
+            orderBy: { occurredAt: "desc" },
+            select: { contactId: true, occurredAt: true },
+          })
+        : [];
+    const latestInteractionByContactId = new Map();
+    for (const interaction of interactions) {
+      if (!latestInteractionByContactId.has(interaction.contactId)) {
+        latestInteractionByContactId.set(
+          interaction.contactId,
+          interaction.occurredAt,
+        );
+      }
+    }
+
+    const contactsByStageId = new Map();
+    for (const contact of contacts) {
+      const stageContacts = contactsByStageId.get(contact.stageId) || [];
+      stageContacts.push({
+        id: contact.id,
+        fullName: contact.fullName,
+        type: contact.type,
+        source: contact.source,
+        stageId: contact.stageId,
+        openTaskCount: taskCountByContactId.get(contact.id) || 0,
+        lastInteractionAt: latestInteractionByContactId.get(contact.id) || null,
+      });
+      contactsByStageId.set(contact.stageId, stageContacts);
+    }
+
     const shaped = stages.map((stage) => ({
       ...stage,
-      contacts: stage.contacts.map((c) => ({
-        id: c.id,
-        fullName: c.fullName,
-        type: c.type,
-        source: c.source,
-        stageId: c.stageId,
-        openTaskCount: c._count.nextSteps,
-        lastInteractionAt: c.interactions[0]?.occurredAt ?? null,
-      })),
+      contacts: contactsByStageId.get(stage.id) || [],
     }));
 
     res.json({ stages: shaped });
@@ -64,50 +106,82 @@ router.get("/", async (_req, res, next) => {
 // Returns contacts whose stage was updated (stageUpdatedAt is set) but have no
 // Interaction or NextStep created after that timestamp — i.e. the transition was
 // never followed up. Feeds the Today View login modal.
-router.get("/unresolved", async (_req, res, next) => {
+router.get("/unresolved", async (req, res, next) => {
   try {
+    const advisorId = getAdvisorId(req);
     const contacts = await prisma.contact.findMany({
       where: {
-        advisorId: ADVISOR_ID,
+        advisorId,
         stageUpdatedAt: { not: null },
       },
       select: {
-        // only select fields needed
         id: true,
         fullName: true,
+        stageId: true,
         stageUpdatedAt: true,
-        stage: { select: { name: true } },
-        interactions: {
-          // get most recent interaction per contact
-          select: { createdAt: true },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-        },
-        nextSteps: {
-          // get most recent nextStep per contact
-          select: { createdAt: true },
-          orderBy: { createdAt: "desc" },
-          take: 1,
-        },
       },
     });
 
+    const contactIds = contacts.map((contact) => contact.id);
+    const stageIds = [
+      ...new Set(contacts.map((contact) => contact.stageId).filter(Boolean)),
+    ];
+
+    const [stages, interactions, nextSteps] = await Promise.all([
+      stageIds.length > 0
+        ? prisma.pipelineStage.findMany({
+            where: { id: { in: stageIds } },
+            select: { id: true, name: true },
+          })
+        : Promise.resolve([]),
+      contactIds.length > 0
+        ? prisma.interaction.findMany({
+            where: { contactId: { in: contactIds } },
+            orderBy: { createdAt: "desc" },
+            select: { contactId: true, createdAt: true },
+          })
+        : Promise.resolve([]),
+      contactIds.length > 0
+        ? prisma.nextStep.findMany({
+            where: { contactId: { in: contactIds } },
+            orderBy: { createdAt: "desc" },
+            select: { contactId: true, createdAt: true },
+          })
+        : Promise.resolve([]),
+    ]);
+
+    const stageNameById = new Map(
+      stages.map((stage) => [stage.id, stage.name]),
+    );
+    const latestInteractionByContactId = new Map();
+    for (const interaction of interactions) {
+      if (!latestInteractionByContactId.has(interaction.contactId)) {
+        latestInteractionByContactId.set(
+          interaction.contactId,
+          interaction.createdAt,
+        );
+      }
+    }
+    const latestNextStepByContactId = new Map();
+    for (const nextStep of nextSteps) {
+      if (!latestNextStepByContactId.has(nextStep.contactId)) {
+        latestNextStepByContactId.set(nextStep.contactId, nextStep.createdAt);
+      }
+    }
+
     const unresolved = contacts
       .filter((c) => {
-        // check if there is an interaction, if so, compare its createdAt against stageUpdatedAt
-        const lastInteraction = c.interactions[0]?.createdAt ?? null;
-        // same for nextStep
-        const lastNextStep = c.nextSteps[0]?.createdAt ?? null;
+        const lastInteraction = latestInteractionByContactId.get(c.id) || null;
+        const lastNextStep = latestNextStepByContactId.get(c.id) || null;
         const hasFollowUp =
           (lastInteraction && lastInteraction > c.stageUpdatedAt) ||
           (lastNextStep && lastNextStep > c.stageUpdatedAt);
         return !hasFollowUp;
-      }) // result is contacts that had a stage change but no follow-up interaction or nextStep
+      })
       .map((c) => ({
-        // only return fields needed by frontend
         id: c.id,
         fullName: c.fullName,
-        stageName: c.stage?.name ?? null,
+        stageName: c.stageId ? stageNameById.get(c.stageId) || null : null,
         stageUpdatedAt: c.stageUpdatedAt,
       }));
 
@@ -129,11 +203,12 @@ router.post(
   }),
   async (req, res, next) => {
     try {
+      const advisorId = getAdvisorId(req);
       const { name } = req.body;
 
       // Find the current highest order value to place the new stage at the end
       const last = await prisma.pipelineStage.findFirst({
-        where: { advisorId: ADVISOR_ID },
+        where: { advisorId },
         orderBy: { order: "desc" },
         select: { order: true },
       });
@@ -141,7 +216,7 @@ router.post(
 
       const stage = await prisma.pipelineStage.create({
         data: {
-          advisorId: ADVISOR_ID,
+          advisorId,
           name: name.trim(),
           order: nextOrder,
         },
@@ -163,12 +238,16 @@ router.patch(
   validateBody(({ stages }) => {
     const errors = [];
     if (!Array.isArray(stages) || stages.length === 0) {
-      errors.push({ field: "stages", message: "stages must be a non-empty array" });
+      errors.push({
+        field: "stages",
+        message: "stages must be a non-empty array",
+      });
     }
     return errors;
   }),
   async (req, res, next) => {
     try {
+      const advisorId = getAdvisorId(req);
       const { stages } = req.body;
 
       // Validate every entry has id (string) and order (number)
@@ -184,12 +263,15 @@ router.patch(
       // Confirm all supplied stage IDs belong to this advisor
       const ids = stages.map((s) => s.id);
       const existing = await prisma.pipelineStage.findMany({
-        where: { id: { in: ids }, advisorId: ADVISOR_ID },
+        where: { id: { in: ids }, advisorId },
         select: { id: true },
       });
 
       if (existing.length !== ids.length) {
-        throw httpError(403, "One or more stages do not belong to this advisor");
+        throw httpError(
+          403,
+          "One or more stages do not belong to this advisor",
+        );
       }
 
       // PipelineStage has @@unique([advisorId, order]), so swapping two order
@@ -242,6 +324,7 @@ router.patch(
   }),
   async (req, res, next) => {
     try {
+      const advisorId = getAdvisorId(req);
       const { stageId } = req.params;
       const { name } = req.body;
 
@@ -253,7 +336,7 @@ router.patch(
       if (!existing) {
         throw httpError(404, "Stage not found");
       }
-      if (existing.advisorId !== ADVISOR_ID) {
+      if (existing.advisorId !== advisorId) {
         throw httpError(403, "Stage does not belong to this advisor");
       }
 
@@ -274,6 +357,7 @@ router.patch(
 // stage for this advisor before deleting. Does not block deletion.
 router.delete("/stages/:stageId", async (req, res, next) => {
   try {
+    const advisorId = getAdvisorId(req);
     const { stageId } = req.params;
 
     const existing = await prisma.pipelineStage.findUnique({
@@ -284,13 +368,13 @@ router.delete("/stages/:stageId", async (req, res, next) => {
     if (!existing) {
       throw httpError(404, "Stage not found");
     }
-    if (existing.advisorId !== ADVISOR_ID) {
+    if (existing.advisorId !== advisorId) {
       throw httpError(403, "Stage does not belong to this advisor");
     }
 
     // Find the first remaining stage (excluding the one being deleted) to use as fallback
     const fallback = await prisma.pipelineStage.findFirst({
-      where: { advisorId: ADVISOR_ID, id: { not: stageId } },
+      where: { advisorId, id: { not: stageId } },
       orderBy: { order: "asc" },
       select: { id: true },
     });
@@ -325,6 +409,7 @@ router.patch(
   }),
   async (req, res, next) => {
     try {
+      const advisorId = getAdvisorId(req);
       const { contactId } = req.params;
       const { stageId } = req.body;
 
@@ -337,7 +422,7 @@ router.patch(
       if (!contact) {
         throw httpError(404, "Contact not found");
       }
-      if (contact.advisorId !== ADVISOR_ID) {
+      if (contact.advisorId !== advisorId) {
         throw httpError(403, "Forbidden");
       }
 
@@ -350,7 +435,7 @@ router.patch(
       if (!stage) {
         throw httpError(404, "Stage not found");
       }
-      if (stage.advisorId !== ADVISOR_ID) {
+      if (stage.advisorId !== advisorId) {
         throw httpError(403, "Stage does not belong to this advisor");
       }
 

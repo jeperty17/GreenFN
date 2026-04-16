@@ -4,12 +4,22 @@ import AISummaryPage from '../pages/AISummaryPage'
 import ContactsHubPage from '../pages/ContactsHubPage'
 import InteractionHistoryPage from '../pages/InteractionHistoryPage'
 import LeadsPipelinePage from '../pages/LeadsPipelinePage'
+import LoginPage from '../pages/LoginPage'
 import TasksPage from '../pages/TasksPage'
+import RequireAuth from './RequireAuth'
 
 const router = createBrowserRouter([
   {
+    path: '/login',
+    element: <LoginPage />,
+  },
+  {
     path: '/',
-    element: <AppLayout />,
+    element: (
+      <RequireAuth>
+        <AppLayout />
+      </RequireAuth>
+    ),
     children: [
       { index: true, element: <ContactsHubPage /> },
       { path: 'pipeline', element: <LeadsPipelinePage /> },

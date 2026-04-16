@@ -627,3 +627,11 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-04-15 17:44:16 +0800
 - FILES_CHANGED: greenfn/src/lib/operationTracker.js, REVIEW/INTERNAL_VALIDATION_CONSOLE.md, LOG.md
 - CHANGE_SUMMARY: Updated internal validation tracking to skip read-only requests (GET and other non-write methods) so the operations feed highlights only Create/Update/Delete events; revalidated behavior locally by confirming GET calls are excluded, POST calls are captured, and operations feed entries are C/U/D only.
+
+### LOG-0073
+
+- TASK: Authentication Gating
+- SUBTASK: Require login before accessing greenfn-web protected routes
+- COMPLETED_AT: 2026-04-16 17:11:50 +0800
+- FILES_CHANGED: greenfn/package.json, greenfn/package-lock.json, greenfn/src/config/env.js, greenfn/.env.example, greenfn/src/lib/jwtAuth.js, greenfn/src/middleware/requireAuth.js, greenfn/src/modules/auth/routes.js, greenfn/src/routes/index.js, greenfn-web/src/context/AuthContext.tsx, greenfn-web/src/routes/RequireAuth.tsx, greenfn-web/src/pages/LoginPage.tsx, greenfn-web/src/routes/AppRoutes.tsx, greenfn-web/src/main.tsx, greenfn-web/src/layouts/AppLayout.tsx, REVIEW/AUTH_APPROACH.md, LOG.md
+- CHANGE_SUMMARY: Implemented end-to-end login gating by adding backend JWT auth endpoints (`/api/auth/login`, `/api/auth/me`, `/api/auth/logout`), bearer-token middleware for protected API modules, and frontend auth state/route guard/login page wiring so app routes require authentication; added logout control in layout, validated backend auth behavior (401 when unauthenticated, successful login + session check), and confirmed frontend build passes.

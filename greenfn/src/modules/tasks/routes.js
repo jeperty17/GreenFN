@@ -5,10 +5,13 @@ const { validateBody, requiredString } = require("../../middleware/validate");
 
 const router = express.Router();
 
-// Hard-coded until auth is implemented
-const ADVISOR_ID = "seed-user-001";
+const DEFAULT_ADVISOR_ID = "seed-user-001";
 
 const ALLOWED_STATUSES = new Set(["OPEN", "DONE", "CANCELED"]);
+
+function getAdvisorId(req) {
+  return req.authUser?.id || DEFAULT_ADVISOR_ID;
+}
 
 // GET /api/tasks
 // Default: returns all OPEN NextSteps (with a dueAt) for the advisor's contacts,
@@ -17,36 +20,59 @@ const ALLOWED_STATUSES = new Set(["OPEN", "DONE", "CANCELED"]);
 // Tasks with no dueAt are excluded from all responses.
 router.get("/", async (req, res, next) => {
   try {
+    const advisorId = getAdvisorId(req);
     const isCalendar = req.query.view === "calendar";
+
+    const advisorContacts = await prisma.contact.findMany({
+      where: { advisorId },
+      select: {
+        id: true,
+        fullName: true,
+        stageId: true,
+      },
+    });
+    const contactById = new Map(
+      advisorContacts.map((contact) => [contact.id, contact]),
+    );
+    const contactIds = advisorContacts.map((contact) => contact.id);
+    const stageIds = [
+      ...new Set(
+        advisorContacts.map((contact) => contact.stageId).filter(Boolean),
+      ),
+    ];
+    const stages =
+      stageIds.length > 0
+        ? await prisma.pipelineStage.findMany({
+            where: { id: { in: stageIds } },
+            select: { id: true, name: true },
+          })
+        : [];
+    const stageNameById = new Map(
+      stages.map((stage) => [stage.id, stage.name]),
+    );
 
     const tasks = await prisma.nextStep.findMany({
       where: {
-        // open tasks with dueAt belonging to advisor's contacts
         status: "OPEN",
         dueAt: { not: null },
-        contact: { advisorId: ADVISOR_ID },
-      },
-      include: {
-        // include contact and stage info for frontend display
-        contact: {
-          select: {
-            fullName: true,
-            stage: { select: { name: true } },
-          },
-        },
+        contactId: { in: contactIds.length > 0 ? contactIds : ["__none__"] },
       },
       orderBy: { dueAt: "asc" },
     });
 
     const formatTask = (task) => ({
+      contactName:
+        contactById.get(task.contactId)?.fullName || "Unknown Contact",
+      stageName: (() => {
+        const stageId = contactById.get(task.contactId)?.stageId;
+        return stageId ? stageNameById.get(stageId) || null : null;
+      })(),
       id: task.id,
       title: task.title,
       description: task.description,
       dueAt: task.dueAt,
       status: task.status,
       contactId: task.contactId,
-      contactName: task.contact.fullName,
-      stageName: task.contact.stage?.name ?? null,
     });
 
     // Calendar view: return all OPEN tasks as a flat array
@@ -102,6 +128,7 @@ router.post(
   }),
   async (req, res, next) => {
     try {
+      const advisorId = getAdvisorId(req);
       const { contactId, title, description, dueAt } = req.body;
 
       const parsedDueAt = new Date(dueAt);
@@ -118,7 +145,7 @@ router.post(
       if (!contact) {
         throw httpError(404, "Contact not found");
       }
-      if (contact.advisorId !== ADVISOR_ID) {
+      if (contact.advisorId !== advisorId) {
         throw httpError(403, "Forbidden");
       }
 
@@ -176,6 +203,7 @@ router.patch(
   }),
   async (req, res, next) => {
     try {
+      const advisorId = getAdvisorId(req);
       const { taskId } = req.params;
       const { status, dueAt, title, description } = req.body;
 
@@ -190,6 +218,24 @@ router.patch(
       if (parsedDueAt !== undefined) data.dueAt = parsedDueAt;
       if (title !== undefined) data.title = title;
       if (description !== undefined) data.description = description;
+
+      const existingTask = await prisma.nextStep.findUnique({
+        where: { id: taskId },
+        select: { id: true, contactId: true },
+      });
+
+      if (!existingTask) {
+        throw httpError(404, "Task not found");
+      }
+
+      const contact = await prisma.contact.findUnique({
+        where: { id: existingTask.contactId },
+        select: { advisorId: true },
+      });
+
+      if (!contact || contact.advisorId !== advisorId) {
+        throw httpError(403, "Forbidden");
+      }
 
       const task = await prisma.nextStep.update({
         where: { id: taskId },
@@ -207,22 +253,24 @@ router.patch(
 // Permanently deletes a NextStep owned by the advisor.
 router.delete("/:taskId", async (req, res, next) => {
   try {
+    const advisorId = getAdvisorId(req);
     const { taskId } = req.params;
 
     const task = await prisma.nextStep.findUnique({
       where: { id: taskId },
-      select: {
-        id: true,
-        contact: {
-          select: { advisorId: true },
-        },
-      },
+      select: { id: true, contactId: true },
     });
 
     if (!task) {
       throw httpError(404, "Task not found");
     }
-    if (task.contact.advisorId !== ADVISOR_ID) {
+
+    const contact = await prisma.contact.findUnique({
+      where: { id: task.contactId },
+      select: { advisorId: true },
+    });
+
+    if (!contact || contact.advisorId !== advisorId) {
       throw httpError(403, "Forbidden");
     }
 

@@ -53,6 +53,19 @@ const AI_PROVIDER = readOptionalEnv("AI_PROVIDER", "openai");
 const AI_PRIMARY_MODEL = readOptionalEnv("AI_PRIMARY_MODEL", "gpt-4.1-mini");
 const AI_FALLBACK_MODEL = readOptionalEnv("AI_FALLBACK_MODEL", "gpt-4.1-nano");
 const OPENAI_API_KEY = readOptionalEnv("OPENAI_API_KEY");
+const AUTH_LOGIN_EMAIL = readOptionalEnv(
+  "AUTH_LOGIN_EMAIL",
+  "advisor.seed@greenfn.local",
+);
+const AUTH_LOGIN_PASSWORD = readOptionalEnv(
+  "AUTH_LOGIN_PASSWORD",
+  "password123",
+);
+const JWT_ACCESS_SECRET = readOptionalEnv(
+  "JWT_ACCESS_SECRET",
+  "dev-insecure-jwt-secret-change-me",
+);
+const JWT_ACCESS_EXPIRES_IN = readOptionalEnv("JWT_ACCESS_EXPIRES_IN", "15m");
 const AI_TIMEOUT_MS = readOptionalInt("AI_TIMEOUT_MS", 12000);
 const AI_RATE_LIMIT_WINDOW_MS = readOptionalInt(
   "AI_RATE_LIMIT_WINDOW_MS",
@@ -89,6 +102,10 @@ module.exports = {
   AI_PRIMARY_MODEL,
   AI_FALLBACK_MODEL,
   OPENAI_API_KEY,
+  AUTH_LOGIN_EMAIL,
+  AUTH_LOGIN_PASSWORD,
+  JWT_ACCESS_SECRET,
+  JWT_ACCESS_EXPIRES_IN,
   AI_TIMEOUT_MS,
   AI_RATE_LIMIT_WINDOW_MS,
   AI_RATE_LIMIT_MAX_REQUESTS,
