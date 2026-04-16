@@ -635,3 +635,35 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-04-16 17:11:50 +0800
 - FILES_CHANGED: greenfn/package.json, greenfn/package-lock.json, greenfn/src/config/env.js, greenfn/.env.example, greenfn/src/lib/jwtAuth.js, greenfn/src/middleware/requireAuth.js, greenfn/src/modules/auth/routes.js, greenfn/src/routes/index.js, greenfn-web/src/context/AuthContext.tsx, greenfn-web/src/routes/RequireAuth.tsx, greenfn-web/src/pages/LoginPage.tsx, greenfn-web/src/routes/AppRoutes.tsx, greenfn-web/src/main.tsx, greenfn-web/src/layouts/AppLayout.tsx, REVIEW/AUTH_APPROACH.md, LOG.md
 - CHANGE_SUMMARY: Implemented end-to-end login gating by adding backend JWT auth endpoints (`/api/auth/login`, `/api/auth/me`, `/api/auth/logout`), bearer-token middleware for protected API modules, and frontend auth state/route guard/login page wiring so app routes require authentication; added logout control in layout, validated backend auth behavior (401 when unauthenticated, successful login + session check), and confirmed frontend build passes.
+
+### LOG-0074
+
+- TASK: Contacts Hub Implementation
+- SUBTASK: Frontend interaction refinement for collapsible forms and row-level add-tag dropdown
+- COMPLETED_AT: 2026-04-16 22:16:18 +0800
+- FILES_CHANGED: greenfn-web/src/pages/ContactsHubPage.tsx, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Updated Contacts Hub UX by converting Create/Edit Contact and Tag Management into Show/Hide collapsible sections, and replaced the row-level Tags add controls with a single `Add Tag` action that opens a dropdown of assignable tags and applies the selected tag immediately; validated with frontend build.
+
+### LOG-0075
+
+- TASK: Contacts Hub Implementation
+- SUBTASK: Add per-contact details page with clickable name navigation and back button
+- COMPLETED_AT: 2026-04-16 22:35:35 +0800
+- FILES_CHANGED: greenfn-web/src/pages/ContactDetailsPage.tsx, greenfn-web/src/pages/ContactsHubPage.tsx, greenfn-web/src/routes/AppRoutes.tsx, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Added dedicated contact details routing (`/contacts/:contactId`) and made each contact name in Contacts Hub clickable to open that page; implemented contact-specific details view with attributes, interactions, and open tasks, plus a `Back to Contacts Hub` button; validated successful frontend build.
+
+### LOG-0076
+
+- TASK: Contacts Hub Implementation
+- SUBTASK: Increase hover visibility for clickable contact names
+- COMPLETED_AT: 2026-04-16 22:42:31 +0800
+- FILES_CHANGED: greenfn-web/src/pages/ContactsHubPage.tsx, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Enhanced contact-name hover affordance in the Contacts table by adding accent background highlight, stronger underline, and color transition so link interactivity is obvious before click; verified no file diagnostics regressions.
+
+### LOG-0077
+
+- TASK: Contacts Hub Implementation
+- SUBTASK: Add row-level contact delete action under Actions column
+- COMPLETED_AT: 2026-04-16 22:47:17 +0800
+- FILES_CHANGED: greenfn-web/src/pages/ContactsHubPage.tsx, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Added a `Delete` button under each contact row Actions cell with confirmation prompt, wired deletion to `DELETE /api/contacts/:contactId`, reset edit state when deleting the selected contact, and refreshed list state after success; validated with frontend build.
