@@ -112,3 +112,68 @@ After starting both apps and opening `http://localhost:5173/`:
 - **Frontend page component** (`greenfn-web/src/pages/ContactsHubPage.tsx`): implemented list table UI, create/edit contact form, tag management section, row-level tag assignment/removal controls, focus toggle controls, filter/search controls, API wiring, and pagination interactions.
 - **Task tracking** (`TASKS.md`): marked completed Contacts Hub frontend checklist items done for this step.
 - **Review index** (`REVIEW/README.md`): registered this review file.
+
+---
+
+## DB + Deployment Expansion (Contacts Hub)
+
+### Summary
+
+This step completed the Contacts Hub DB checklist and the first two deployment checklist items with a collision-safe, additive migration approach:
+
+- Added new contacts data fields for source categorization and richer optional profile metadata.
+- Added searchable indexes for high-frequency Contacts filters/search dimensions.
+- Added a production-safe API base path configuration (`API_BASE_PATH`) so contacts routes can be deployed under configurable prefixes.
+- Added contacts-specific structured latency/error logs for read/write endpoint observability.
+- Resolved a pre-existing migration replay issue affecting shadow DB by fixing enum type resolution in an Interaction History migration.
+
+### Commands to Reproduce / Validate
+
+Migration creation and apply:
+
+```bash
+cd greenfn
+npx prisma migrate dev --name contacts_hub_expand_source_category_metadata
+```
+
+Schema and migration checks:
+
+```bash
+cd greenfn
+npx prisma validate
+npx prisma migrate status
+```
+
+Seed health check:
+
+```bash
+cd greenfn
+npm run prisma:seed
+```
+
+API prefix configuration check:
+
+```bash
+# Backend .env example now includes API_BASE_PATH="/api"
+# Example custom prefix run:
+API_BASE_PATH="/v1" npm run dev
+```
+
+### Observable Checks
+
+- Prisma migration status reports database schema up to date after applying Contacts expansion migration.
+- Prisma schema validation succeeds with no model/index/type errors.
+- Seed script completes successfully after migration changes.
+- Contacts route mounting now follows configured API base path from env (default `/api`).
+- Contacts endpoint telemetry logs include operation, duration, status code, and hashed identifiers.
+
+### File Type Rundown (DB + Deployment Step)
+
+- **Prisma schema/model contract** (`greenfn/prisma/schema.prisma`): added `ContactSourceCategory`, new optional `Contact` metadata columns, and new query-supporting indexes.
+- **Prisma migration SQL** (`greenfn/prisma/migrations/20260415083321_contacts_hub_expand_source_category_metadata/migration.sql`): generated additive migration for enum, columns, and indexes.
+- **Prisma migration SQL fix** (`greenfn/prisma/migrations/20260414220500_interaction_type_enum_add_required_values/migration.sql`): corrected enum regtype lookup to support reliable shadow DB replay.
+- **Backend env config** (`greenfn/src/config/env.js`): added normalized `API_BASE_PATH` parsing/export.
+- **Backend app mount** (`greenfn/src/app.js`): switched API router mount from hardcoded `/api` to configurable `API_BASE_PATH`.
+- **Backend env template** (`greenfn/.env.example`): documented `API_BASE_PATH` default.
+- **Backend contacts routes** (`greenfn/src/modules/contacts/routes.js`): added source-category and policy metadata support plus metrics middleware wiring.
+- **Backend contacts telemetry helper** (`greenfn/src/modules/contacts/logging.js`): new structured logging utility for contacts endpoints.

@@ -1,8 +1,10 @@
 const express = require('express')
 const cors = require('cors')
 const apiRouter = require('./routes')
-const { NODE_ENV, CORS_ALLOWED_ORIGINS } = require('./config/env')
+const internalRoutes = require('./modules/internal/routes')
+const { NODE_ENV, CORS_ALLOWED_ORIGINS, API_BASE_PATH } = require('./config/env')
 const { requestLogger } = require('./middleware/requestLogger')
+const { createOperationRecorder } = require('./middleware/operationRecorder')
 const { notFoundHandler } = require('./middleware/notFound')
 const { errorHandler } = require('./middleware/errorHandler')
 
@@ -35,12 +37,14 @@ function createApp() {
   app.use(cors(resolveCorsOptions()))
   app.use(express.json())
   app.use(requestLogger)
+  app.use(createOperationRecorder({ apiBasePath: API_BASE_PATH }))
 
   app.get('/', (_req, res) => {
     res.json({ service: 'greenfn-api', status: 'ok' })
   })
 
-  app.use('/api', apiRouter)
+  app.use('/internal', internalRoutes)
+  app.use(API_BASE_PATH, apiRouter)
 
   app.use(notFoundHandler)
   app.use(errorHandler)

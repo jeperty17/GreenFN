@@ -4,7 +4,7 @@ import AISummaryPage from '../pages/AISummaryPage'
 import ContactsHubPage from '../pages/ContactsHubPage'
 import InteractionHistoryPage from '../pages/InteractionHistoryPage'
 import LeadsPipelinePage from '../pages/LeadsPipelinePage'
-import TodayPage from '../pages/TodayPage'
+import TasksPage from '../pages/TasksPage'
 
 const router = createBrowserRouter([
   {
@@ -13,7 +13,7 @@ const router = createBrowserRouter([
     children: [
       { index: true, element: <ContactsHubPage /> },
       { path: 'pipeline', element: <LeadsPipelinePage /> },
-      { path: 'today', element: <TodayPage /> },
+      { path: 'today', element: <TasksPage /> },
       { path: 'interaction-history', element: <InteractionHistoryPage /> },
       { path: 'ai-summary', element: <AISummaryPage /> },
     ],

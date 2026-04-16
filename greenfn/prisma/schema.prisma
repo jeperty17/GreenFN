@@ -28,20 +28,25 @@ model Contact {
 
   type ContactType @default(LEAD)
 
-  stageId String?
-  stage   PipelineStage? @relation(fields: [stageId], references: [id])
+  stageId        String?
+  stage          PipelineStage? @relation(fields: [stageId], references: [id])
+  stageUpdatedAt DateTime? // set when the contact is moved to a new stage
 
   fullName String
   phone    String?
   email    String?
 
   source String?
+  sourceCategory ContactSourceCategory?
 
   birthday DateTime?
 
   isStarred Boolean @default(false)
 
   notes String?
+  lifePriorities   String?
+  portfolioSummary String?
+  policyMetadata   Json?
 
   interactions  Interaction[]
   aiSummaries   AiSummary[]
@@ -61,6 +66,11 @@ model Contact {
   @@index([stageId])
   @@index([type])
   @@index([isStarred])
+  @@index([fullName])
+  @@index([email])
+  @@index([phone])
+  @@index([source])
+  @@index([sourceCategory])
 }
 
 model PipelineStage {
@@ -281,6 +291,15 @@ model ContactChannel {
 enum ContactType {
   LEAD
   CLIENT
+}
+
+enum ContactSourceCategory {
+  REFERRAL
+  COLD_CALL
+  SOCIAL_MEDIA
+  EVENT
+  WEBSITE
+  OTHER
 }
 
 enum InteractionType {

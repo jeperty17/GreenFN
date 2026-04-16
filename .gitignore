@@ -1,5 +1,11 @@
 node_modules
 # Keep environment variables out of version control
 .env
+.claude
+.vscode
 
 /generated/prisma
+.DS_Store
+
+CLAUDE.md
+REQUIREMENTS.md
