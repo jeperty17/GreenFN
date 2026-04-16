@@ -178,29 +178,29 @@
 ### FRONTEND
 
 - [x] Build structured post-interaction questionnaire form.
-- [ ] Add alternative input modes for pasted meeting summary, unstructured notes, or pasted chat transcript.
-- [ ] Build summary preview and edit-before-save workflow.
-- [ ] Add explicit user controls to skip AI generation when not needed.
+- [x] Add alternative input modes for pasted meeting summary, unstructured notes, or pasted chat transcript.
+- [x] Build summary preview and edit-before-save workflow.
+- [x] Add explicit user controls to skip AI generation when not needed.
 
 ### BACKEND
 
-- [ ] Implement endpoint to generate summary from structured or unstructured input.
-- [ ] Implement prompt templates for concise recall-focused summaries.
-- [ ] Implement content safety checks and token/length limits.
-- [ ] Persist both generated summary and metadata (model, timestamp, source mode).
+- [x] Implement endpoint to generate summary from structured or unstructured input.
+- [x] Implement prompt templates for concise recall-focused summaries.
+- [x] Implement content safety checks and token/length limits.
+- [x] Persist both generated summary and metadata (model, timestamp, source mode).
 
 ### DB
 
-- [ ] Create ai_summaries table linked to interactions and contacts.
-- [ ] Add fields for input mode, generated summary text, and model metadata.
-- [ ] Add retention policy fields and soft-delete support for privacy.
-- [ ] Add indexes for per-contact summary retrieval.nmbnv
+- [x] Create ai_summaries table linked to interactions and contacts.
+- [x] Add fields for input mode, generated summary text, and model metadata.
+- [x] Add retention policy fields and soft-delete support for privacy.
+- [x] Add indexes for per-contact summary retrieval.nmbnv
 
 ### DEPLOYMENT
 
-- [ ] Set production rate limits and timeout strategy for AI endpoints.
-- [ ] Add usage/cost monitoring dashboards for AI calls.
-- [ ] Add fallback behavior when AI provider is unavailable.
+- [x] Set production rate limits and timeout strategy for AI endpoints.
+- [x] Add usage/cost monitoring dashboards for AI calls.
+- [x] Add fallback behavior when AI provider is unavailable.
 
 ## Assisted Messaging for Next Steps (Extension)
 

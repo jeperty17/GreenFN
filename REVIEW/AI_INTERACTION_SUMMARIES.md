@@ -15,6 +15,60 @@ Built the structured post-interaction questionnaire form component as the first 
 - ✅ Added contact selector UI to associate interactions with contacts
 - ✅ Implemented form validation for each input mode
 - ✅ Added mode-specific helper text and UI feedback
+- ✅ Completed alternative input modes task for pasted meeting summary, unstructured notes, and chat transcript (all modes implemented and validated in UI)
+- ✅ Added summary preview and edit-before-save workflow with:
+  - Draft generation from questionnaire input
+  - Editable preview textarea before save
+  - Save action with validation feedback
+  - Back action to return to questionnaire editing
+- ✅ Added explicit skip-AI user controls with:
+  - Skip action in questionnaire stage
+  - Skip action in preview stage
+  - Dedicated "AI Generation Skipped" status card
+  - Clear options to proceed without AI summary or return to generation
+- ✅ Implemented backend AI summary generation endpoint (`POST /api/ai/summaries`) supporting both:
+  - Structured source mode payload (`sourceMode: structured` + `structuredInput` fields)
+  - Non-structured payload (`sourceMode` + free-text `input`)
+  - Endpoint now calls AI service wrapper and returns generated summary text, model, source mode, usage metadata, and timestamp
+- ✅ Implemented concise recall-focused prompt templates in AI service with:
+  - Mode-aware guidance by source type (`structured`, `pasted-summary`, `unstructured`, `chat-transcript`, `notes`)
+  - Explicit output contract (fixed sections, concise bullets, no guessing)
+  - Template emphasis injection in summary generation messages
+- ✅ Implemented content safety checks and token/length limits in AI service:
+  - Blocked-content screening for high-risk categories (self-harm intent, violent threats, sexual-minors content)
+  - Input token cap enforcement (`maxInputTokens`) using estimated token count
+  - Input character cap enforcement (`maxInputChars`)
+  - Output character cap enforcement for summaries and drafts (`maxSummaryOutputChars`, `maxDraftOutputChars`)
+  - Non-empty output validation before returning AI responses
+- ✅ Implemented backend persistence for generated summaries and metadata:
+  - `POST /api/ai/summaries` now stores generated text in `AiSummary`
+  - Persists `model`, `sourceMode`, and `generatedAt` fields
+  - Returns persisted `summary.id` in response payload
+  - Optionally links persisted summary to an interaction when `interactionId` is provided
+- ✅ Completed AI summary DB expansion for contact linkage, metadata, retention, and retrieval:
+  - Linked `AiSummary` to `Contact` via optional `contactId`
+  - Added `inputMode` and `modelMetadata` fields
+  - Added retention/soft-delete fields: `retentionUntil`, `deletedAt`
+  - Added indexes for per-contact retrieval and retention checks
+  - Added additive migration script with backfill for `inputMode` and best-effort `contactId`
+- ✅ Set deployment-grade AI endpoint control strategy:
+  - Added env-driven AI timeout (`AI_TIMEOUT_MS`) wired into AI service initialization
+  - Added env-driven AI rate limiting (`AI_RATE_LIMIT_WINDOW_MS`, `AI_RATE_LIMIT_MAX_REQUESTS`)
+  - Enforced per-client in-memory rate limiting on `POST /api/ai/summaries`
+  - Returned structured 429 payload on limit breach with retry guidance metadata
+- ✅ Added usage/cost monitoring dashboard backend support:
+  - Added in-memory AI metrics aggregator for request volume, success/failure counts, estimated token usage, estimated cost, and average latency
+  - Added model/path breakdown aggregates and hourly cost/request series
+  - Added dashboard-ready endpoint `GET /api/ai/metrics?windowMinutes=<int>`
+- ✅ Added provider-unavailable fallback behavior for AI summaries:
+  - Added route-level degraded fallback when AI provider is unavailable (timeouts, upstream 5xx/429, or missing key)
+  - Added local deterministic summary generation with consistent sectioned output contract
+  - Added fallback metadata in persisted/response model metadata (`provider`, `degraded`, `fallbackReason`)
+  - Added fallback usage logging event `summary_provider_unavailable_local_fallback`
+- ✅ Wired AI Summary frontend to backend persistence path:
+  - `AISummaryPage` now calls `POST /api/ai/summaries` during generation flow
+  - Summary preview now uses backend-generated text and tracks persisted `summary.id`
+  - Save action now confirms persisted summary ID instead of implying local-only persistence
 
 ## Reproducible Validation Commands
 
@@ -45,6 +99,115 @@ cd greenfn-web && npm run build
 ```
 
 Expected: Build succeeds with no TypeScript or bundler errors.
+
+### 3b. Verify Backend AI Routes Syntax
+
+```bash
+node --check greenfn/src/modules/ai/routes.js
+```
+
+Expected: No syntax errors.
+
+### 3d. Verify Backend AI Service Syntax
+
+```bash
+node --check greenfn/src/modules/ai/service.js
+```
+
+Expected: No syntax errors.
+
+### 3f. Verify Prisma Client Generation (Schema Valid)
+
+```bash
+cd greenfn && npm run prisma:generate
+```
+
+Expected: Prisma client generated successfully.
+
+### 3g. Verify Deployment Controls Wiring
+
+```bash
+grep -n "AI_TIMEOUT_MS\|AI_RATE_LIMIT_WINDOW_MS\|AI_RATE_LIMIT_MAX_REQUESTS" greenfn/src/config/env.js greenfn/.env.example greenfn/src/modules/ai/routes.js
+```
+
+Expected: Matches show env declaration, defaults, exports, and route wiring.
+
+### 3h. Verify Metrics Dashboard Endpoint Wiring
+
+```bash
+grep -n "getAIMetricsSnapshot\|/metrics\|series\|estimatedCostUsd" greenfn/src/modules/ai/logging.js greenfn/src/modules/ai/routes.js
+```
+
+Expected: Matches show metrics aggregator logic and `/api/ai/metrics` route.
+
+### 3i. Verify Provider-Unavailable Fallback Wiring
+
+```bash
+grep -n "summary_provider_unavailable_local_fallback\|buildLocalFallbackSummary\|isAiProviderUnavailable\|degraded" greenfn/src/modules/ai/routes.js
+```
+
+Expected: Matches show fallback detection, local summary generation, fallback logging, and degraded response metadata.
+
+### 3j. Verify End-to-End Summary Persistence
+
+```bash
+curl -i -X POST http://localhost:3000/api/ai/summaries \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contactId":"<contact-id>",
+    "sourceMode":"unstructured",
+    "input":"Client wants stable premiums and agreed to review two options next week."
+  }'
+```
+
+Expected: `200` response with `summary.id` populated and `summary.text` present.
+
+### 3e. Verify Safety/Limit Helpers Are Wired
+
+```bash
+grep -n "validateContentSafety\|validateInputTokenLimit\|maxInputTokens\|maxSummaryOutputChars\|maxDraftOutputChars" greenfn/src/modules/ai/service.js
+```
+
+Expected: Matches show safety and limit checks in both `generateSummary` and `draftMessage` flows.
+
+### 3c. Verify Backend Endpoint Contract (With Env Loaded)
+
+```bash
+cd greenfn && npm run server
+```
+
+Example request (structured):
+
+```bash
+curl -X POST http://localhost:3000/api/ai/summaries \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contactId":"seed-contact-alice",
+    "sourceMode":"structured",
+    "structuredInput":{
+      "keyPoints":"Reviewed goals for education planning",
+      "clientNeeds":"Wants predictable premium and clear timeline",
+      "nextSteps":"Send two options and arrange next call",
+      "followUpAction":"Send proposal by Friday"
+    }
+  }'
+```
+
+Example request (unstructured):
+
+```bash
+curl -X POST http://localhost:3000/api/ai/summaries \
+  -H "Content-Type: application/json" \
+  -d '{
+    "contactId":"seed-contact-alice",
+    "sourceMode":"unstructured",
+    "input":"Client asked for lower-risk options and requested a follow-up next week."
+  }'
+```
+
+Expected: `200` with response object under `summary` containing `text`, `model`, `sourceMode`, `usage`, `generatedAt`.
+
+Expected persisted contract update: response `summary` now also includes `id` and `interactionLinked`.
 
 ### 4. Run Frontend Dev Server and Check Routes
 
@@ -111,9 +274,7 @@ Expected: `onSubmit` callback prop and `isLoading` state support defined.
 
 ## Next Task
 
-Next task in FRONTEND: "Add alternative input modes for pasted meeting summary, unstructured notes, or pasted chat transcript."
-
-**Note:** All 4 input modes are already functional in the current implementation. This task can be marked complete in the next phase if additional refinements (like input validation, preview workflows, or UX enhancements) are not necessary.
+Next task after completing AI Interaction Summaries: Assisted Messaging for Next Steps — FRONTEND — "Build message draft panel triggered from due message-related tasks."
 
 ## Testing Notes
 

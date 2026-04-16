@@ -9,12 +9,13 @@ Interaction History deployment validation is complete: timeline query performanc
 Implemented behavior:
 
 - Loads contacts from `GET /api/contacts`.
+- Loads interaction timeline entries from `GET /api/interactions` for the selected contact.
 - Allows selecting a contact from a dropdown.
 - Renders a timeline with newest entries first.
 - Shows interaction type badges, date/time, and notes content.
 - Handles contact loading, error, and empty timeline states.
 - Adds an interaction entry form with required fields for type, date/time, and notes.
-- Adds submitted interaction entries directly into the selected contact timeline.
+- Persists submitted interaction entries via `POST /api/interactions` and updates timeline from API response.
 - Adds quick filters for interaction type and date range on the timeline panel.
 - Adds optional links from timeline entries to related next-step tasks in the Today view.
 - Adds backend CRUD routes for interactions: create, read-by-id, update, delete, and a contact-scoped read list.
@@ -150,6 +151,7 @@ Expected:
 
 - `greenfn-web/src/pages/InteractionHistoryPage.tsx` — new per-contact timeline UI and contact fetch wiring.
 - `greenfn-web/src/pages/InteractionHistoryPage.tsx` — interaction entry form (type/date/notes), validation, and in-page timeline insertion logic.
+- `greenfn-web/src/pages/InteractionHistoryPage.tsx` — interaction entry form (type/date/notes), validation, backend `POST /api/interactions` persistence, and contact-scoped timeline loading via `GET /api/interactions`.
 - `greenfn-web/src/pages/InteractionHistoryPage.tsx` — quick filters by interaction type and date range, including reset behavior.
 - `greenfn-web/src/pages/InteractionHistoryPage.tsx` — related next-step task links rendered per interaction entry.
 - `greenfn/src/modules/interactions/routes.js` — interaction CRUD/list routes plus validation limits and summary link/unlink support.

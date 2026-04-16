@@ -41,59 +41,23 @@ type InteractionLog = {
   } | null;
 };
 
+type InteractionApiItem = {
+  id: string;
+  contactId: string;
+  type: string;
+  occurredAt: string;
+  notes: string | null;
+};
+
+type InteractionsResponse = {
+  items: InteractionApiItem[];
+};
+
 type InteractionFormState = {
   type: InteractionType;
   interactionDate: string;
   notes: string;
 };
-
-const SAMPLE_INTERACTIONS: InteractionLog[] = [
-  {
-    id: "ih-001",
-    contactId: "seed-contact-alice",
-    type: "CALL",
-    interactionDate: "2026-04-12T09:30:00.000Z",
-    notes:
-      "Follow-up call after product briefing. Clarified short-term liquidity concern and agreed to compare two options next week.",
-    relatedTask: {
-      id: "task-001",
-      title: "Send product comparison summary",
-    },
-  },
-  {
-    id: "ih-002",
-    contactId: "seed-contact-alice",
-    type: "MEETING",
-    interactionDate: "2026-04-07T03:00:00.000Z",
-    notes:
-      "In-person review of current portfolio allocation. Client prioritized education planning and emergency coverage.",
-    relatedTask: {
-      id: "task-002",
-      title: "Prepare education planning options",
-    },
-  },
-  {
-    id: "ih-003",
-    contactId: "seed-contact-ben",
-    type: "WHATSAPP_DM",
-    interactionDate: "2026-04-11T14:10:00.000Z",
-    notes:
-      "Sent appointment confirmation and agenda. Client confirmed Saturday slot and requested premium estimate examples.",
-    relatedTask: {
-      id: "task-003",
-      title: "Draft premium estimate scenarios",
-    },
-  },
-  {
-    id: "ih-004",
-    contactId: "seed-contact-charlotte",
-    type: "GENERAL_NOTE",
-    interactionDate: "2026-04-05T10:45:00.000Z",
-    notes:
-      "Client mentioned upcoming housing plans and asked for advice on balancing mortgage commitments with protection.",
-    relatedTask: null,
-  },
-];
 
 const typeLabelMap: Record<InteractionType, string> = {
   CALL: "Call",
@@ -101,6 +65,39 @@ const typeLabelMap: Record<InteractionType, string> = {
   WHATSAPP_DM: "WhatsApp/DM",
   GENERAL_NOTE: "General Note",
 };
+
+function normalizeInteractionType(type: string): InteractionType {
+  const normalizedType = String(type || "")
+    .trim()
+    .toUpperCase();
+
+  if (normalizedType === "CALL" || normalizedType === "MEETING") {
+    return normalizedType;
+  }
+
+  if (
+    normalizedType === "WHATSAPP_DM" ||
+    normalizedType === "WHATSAPP" ||
+    normalizedType === "TELEGRAM" ||
+    normalizedType === "INSTAGRAM" ||
+    normalizedType === "EMAIL"
+  ) {
+    return "WHATSAPP_DM";
+  }
+
+  return "GENERAL_NOTE";
+}
+
+function mapInteractionFromApi(item: InteractionApiItem): InteractionLog {
+  return {
+    id: item.id,
+    contactId: item.contactId,
+    type: normalizeInteractionType(item.type),
+    interactionDate: item.occurredAt,
+    notes: item.notes || "",
+    relatedTask: null,
+  };
+}
 
 function currentDateTimeLocal() {
   const now = new Date();
@@ -126,8 +123,10 @@ function InteractionHistoryPage() {
   const [selectedContactId, setSelectedContactId] = useState<string>("");
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
   const [contactsError, setContactsError] = useState("");
-  const [interactionLogs, setInteractionLogs] =
-    useState<InteractionLog[]>(SAMPLE_INTERACTIONS);
+  const [interactionLogs, setInteractionLogs] = useState<InteractionLog[]>([]);
+  const [isLoadingInteractions, setIsLoadingInteractions] = useState(false);
+  const [interactionsError, setInteractionsError] = useState("");
+  const [isSavingInteraction, setIsSavingInteraction] = useState(false);
   const [formState, setFormState] = useState<InteractionFormState>(
     EMPTY_INTERACTION_FORM,
   );
@@ -181,6 +180,50 @@ function InteractionHistoryPage() {
     };
   }, []);
 
+  useEffect(() => {
+    const abortController = new AbortController();
+
+    async function fetchInteractions() {
+      if (!selectedContactId) {
+        setInteractionLogs([]);
+        return;
+      }
+
+      setIsLoadingInteractions(true);
+      setInteractionsError("");
+
+      try {
+        const response = await fetch(
+          `${API_BASE_URL}/api/interactions?contactId=${encodeURIComponent(selectedContactId)}&page=1&pageSize=200&sortDirection=desc`,
+          { signal: abortController.signal },
+        );
+
+        if (!response.ok) {
+          throw new Error(`Failed to load interactions (${response.status})`);
+        }
+
+        const payload: InteractionsResponse = await response.json();
+        setInteractionLogs((payload.items || []).map(mapInteractionFromApi));
+      } catch (error) {
+        if ((error as Error).name === "AbortError") {
+          return;
+        }
+
+        setInteractionsError(
+          (error as Error).message || "Failed to load interactions",
+        );
+      } finally {
+        setIsLoadingInteractions(false);
+      }
+    }
+
+    fetchInteractions();
+
+    return () => {
+      abortController.abort();
+    };
+  }, [selectedContactId]);
+
   const selectedContact = contacts.find(
     (contact) => contact.id === selectedContactId,
   );
@@ -231,7 +274,7 @@ function InteractionHistoryPage() {
     setEndDateFilter("");
   }
 
-  function handleSubmitInteraction(event: FormEvent<HTMLFormElement>) {
+  async function handleSubmitInteraction(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setFormError("");
     setFormSuccess("");
@@ -251,22 +294,45 @@ function InteractionHistoryPage() {
       return;
     }
 
-    const nextLog: InteractionLog = {
-      id: `ih-${Date.now()}`,
-      contactId: selectedContactId,
-      type: formState.type,
-      interactionDate: new Date(formState.interactionDate).toISOString(),
-      notes: formState.notes.trim(),
-      relatedTask: null,
-    };
+    setIsSavingInteraction(true);
 
-    setInteractionLogs((currentLogs) => [nextLog, ...currentLogs]);
-    setFormState({
-      ...EMPTY_INTERACTION_FORM,
-      type: formState.type,
-      interactionDate: currentDateTimeLocal(),
-    });
-    setFormSuccess("Interaction log added to timeline.");
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/interactions`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contactId: selectedContactId,
+          type: formState.type,
+          occurredAt: new Date(formState.interactionDate).toISOString(),
+          notes: formState.notes.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        const apiErrorMessage = errorPayload?.error?.message;
+        throw new Error(
+          apiErrorMessage || `Failed to save interaction (${response.status})`,
+        );
+      }
+
+      const payload = await response.json();
+      const created = mapInteractionFromApi(payload.item as InteractionApiItem);
+
+      setInteractionLogs((currentLogs) => [created, ...currentLogs]);
+      setFormState({
+        ...EMPTY_INTERACTION_FORM,
+        type: formState.type,
+        interactionDate: currentDateTimeLocal(),
+      });
+      setFormSuccess("Interaction saved to database.");
+    } catch (error) {
+      setFormError((error as Error).message || "Failed to save interaction.");
+    } finally {
+      setIsSavingInteraction(false);
+    }
   }
 
   return (
@@ -388,7 +454,9 @@ function InteractionHistoryPage() {
 
             <Button
               type="submit"
-              disabled={isLoadingContacts || !selectedContactId}
+              disabled={
+                isLoadingContacts || isSavingInteraction || !selectedContactId
+              }
             >
               Add Interaction
             </Button>
@@ -454,7 +522,17 @@ function InteractionHistoryPage() {
             </Button>
           </div>
 
-          {filteredTimelineItems.length === 0 ? (
+          {interactionsError && (
+            <p className="text-sm text-destructive">
+              Error: {interactionsError}
+            </p>
+          )}
+
+          {!interactionsError && isLoadingInteractions ? (
+            <p className="text-sm text-muted-foreground">
+              Loading interactions...
+            </p>
+          ) : filteredTimelineItems.length === 0 ? (
             <p className="text-sm text-muted-foreground">
               No interaction logs match the selected filters.
             </p>

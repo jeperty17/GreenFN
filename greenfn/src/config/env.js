@@ -1,48 +1,72 @@
 const readRequiredEnv = (name) => {
-  const value = process.env[name]
+  const value = process.env[name];
 
-  if (!value || value.trim() === '') {
-    throw new Error(`Missing required environment variable: ${name}`)
+  if (!value || value.trim() === "") {
+    throw new Error(`Missing required environment variable: ${name}`);
   }
 
-  return value
-}
+  return value;
+};
 
-const readOptionalEnv = (name, fallbackValue = '') => {
-  const value = process.env[name]
+const readOptionalEnv = (name, fallbackValue = "") => {
+  const value = process.env[name];
 
-  if (!value || value.trim() === '') {
-    return fallbackValue
+  if (!value || value.trim() === "") {
+    return fallbackValue;
   }
 
-  return value
-}
+  return value;
+};
 
-const PORT = Number(process.env.PORT || 3000)
-const NODE_ENV = process.env.NODE_ENV || 'development'
+const readOptionalInt = (name, fallbackValue) => {
+  const value = process.env[name];
 
-const DATABASE_URL = readRequiredEnv('DATABASE_URL')
-const DIRECT_URL = readRequiredEnv('DIRECT_URL')
+  if (!value || value.trim() === "") {
+    return fallbackValue;
+  }
 
-const AI_PROVIDER = readOptionalEnv('AI_PROVIDER', 'openai')
-const AI_PRIMARY_MODEL = readOptionalEnv('AI_PRIMARY_MODEL', 'gpt-4.1-mini')
-const AI_FALLBACK_MODEL = readOptionalEnv('AI_FALLBACK_MODEL', 'gpt-4.1-nano')
-const OPENAI_API_KEY = readOptionalEnv('OPENAI_API_KEY')
+  const parsed = Number.parseInt(value, 10);
+  if (Number.isNaN(parsed) || parsed < 1) {
+    return fallbackValue;
+  }
+
+  return parsed;
+};
+
+const PORT = Number(process.env.PORT || 3000);
+const NODE_ENV = process.env.NODE_ENV || "development";
+
+const DATABASE_URL = readRequiredEnv("DATABASE_URL");
+const DIRECT_URL = readRequiredEnv("DIRECT_URL");
+
+const AI_PROVIDER = readOptionalEnv("AI_PROVIDER", "openai");
+const AI_PRIMARY_MODEL = readOptionalEnv("AI_PRIMARY_MODEL", "gpt-4.1-mini");
+const AI_FALLBACK_MODEL = readOptionalEnv("AI_FALLBACK_MODEL", "gpt-4.1-nano");
+const OPENAI_API_KEY = readOptionalEnv("OPENAI_API_KEY");
+const AI_TIMEOUT_MS = readOptionalInt("AI_TIMEOUT_MS", 12000);
+const AI_RATE_LIMIT_WINDOW_MS = readOptionalInt(
+  "AI_RATE_LIMIT_WINDOW_MS",
+  60000,
+);
+const AI_RATE_LIMIT_MAX_REQUESTS = readOptionalInt(
+  "AI_RATE_LIMIT_MAX_REQUESTS",
+  20,
+);
 const CORS_ALLOWED_ORIGINS_RAW = readOptionalEnv(
-  'CORS_ALLOWED_ORIGINS',
-  'http://localhost:5173,https://greenfn-web.vercel.app'
-)
+  "CORS_ALLOWED_ORIGINS",
+  "http://localhost:5173,https://greenfn-web.vercel.app",
+);
 
-const CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS_RAW.split(',')
+const CORS_ALLOWED_ORIGINS = CORS_ALLOWED_ORIGINS_RAW.split(",")
   .map((origin) => origin.trim())
-  .filter(Boolean)
+  .filter(Boolean);
 
 function requireOpenAIApiKey() {
   if (!OPENAI_API_KEY) {
-    throw new Error('Missing required environment variable: OPENAI_API_KEY')
+    throw new Error("Missing required environment variable: OPENAI_API_KEY");
   }
 
-  return OPENAI_API_KEY
+  return OPENAI_API_KEY;
 }
 
 module.exports = {
@@ -54,6 +78,9 @@ module.exports = {
   AI_PRIMARY_MODEL,
   AI_FALLBACK_MODEL,
   OPENAI_API_KEY,
+  AI_TIMEOUT_MS,
+  AI_RATE_LIMIT_WINDOW_MS,
+  AI_RATE_LIMIT_MAX_REQUESTS,
   CORS_ALLOWED_ORIGINS,
   requireOpenAIApiKey,
-}
+};

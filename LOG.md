@@ -52,6 +52,14 @@ Track all completed changes made in this repository, now and in the future, incl
 - FILES_CHANGED: TASKS.md
 - CHANGE_SUMMARY: Created `TASKS.md` with `SETUP` and `IMPLEMENTATION` sections, including feature-specific `FRONTEND`, `BACKEND`, `DB`, and `DEPLOYMENT` subtasks.
 
+### LOG-0046
+
+- TASK: Tooling Maintenance
+- SUBTASK: Reapply TypeScript deprecation-safe tsconfig settings after branch/config drift
+- COMPLETED_AT: 2026-04-14 10:08:46 +08
+- FILES_CHANGED: greenfn/tsconfig.json, greenfn-web/tsconfig.app.json, LOG.md
+- CHANGE_SUMMARY: Reapplied TypeScript deprecation-safe configuration by updating backend `module/moduleResolution` to `Node16/node16` and restoring `ignoreDeprecations: "6.0"` in frontend app tsconfig; verified all tracked tsconfig files report no diagnostics.
+
 ### LOG-0002
 
 - TASK: Project Governance
@@ -475,3 +483,123 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-04-15 23:11:50 +08
 - FILES_CHANGED: greenfn-web/tsconfig.app.json, greenfn-web/tsconfig.node.json, LOG.md
 - CHANGE_SUMMARY: Resolved VS Code TypeScript diagnostics error for deprecated `baseUrl` by removing `baseUrl` from frontend tsconfig files while retaining path aliases via `paths`; validated both editor diagnostics (no errors in tsconfig files) and build output (`npm run build` passes).
+
+### LOG-0055
+
+- TASK: Deployment Reliability
+- SUBTASK: Fix Railway Prisma client module resolution at runtime
+- COMPLETED_AT: 2026-04-14 21:03:48 +08
+- FILES_CHANGED: greenfn/src/lib/prisma.js, greenfn/prisma/seed.js, greenfn/prisma/schema.prisma, greenfn/package.json, LOG.md
+- CHANGE_SUMMARY: Replaced runtime and seed Prisma imports from custom generated paths to `@prisma/client`, removed custom Prisma generator output override so client generates to default package location, added `postinstall` generation via `npx prisma generate` for deployment installs, then validated successful local generation and backend startup.
+
+### LOG-0056
+
+- TASK: Deployment Reliability
+- SUBTASK: Add dual-path Prisma client loading to prevent output path mismatch crashes
+- COMPLETED_AT: 2026-04-14 21:31:54 +08
+- FILES_CHANGED: greenfn/src/lib/prisma.js, greenfn/prisma/seed.js, LOG.md
+- CHANGE_SUMMARY: Added runtime/seed fallback imports that first try `@prisma/client` and then fall back to generated client paths, allowing service startup regardless of whether Prisma client generation targets default `.prisma` output or `generated/prisma`; validated backend boots successfully with current start command.
+
+### LOG-0057
+
+- TASK: AI Interaction Summaries Implementation
+- SUBTASK: FRONTEND step 2 - complete alternative input modes
+- COMPLETED_AT: 2026-04-15 23:39:14 +08
+- FILES_CHANGED: TASKS.md, REVIEW/AI_INTERACTION_SUMMARIES.md, LOG.md
+- CHANGE_SUMMARY: Verified and completed alternative input modes for AI summary intake (pasted meeting summary, unstructured notes, and chat transcript) in the existing questionnaire UI, marked the corresponding AI Interaction Summaries FRONTEND checklist item complete, and updated review documentation to point to the next pending frontend task.
+
+### LOG-0058
+
+- TASK: AI Interaction Summaries Implementation
+- SUBTASK: FRONTEND step 3 - summary preview and edit-before-save workflow
+- COMPLETED_AT: 2026-04-15 23:46:36 +08
+- FILES_CHANGED: greenfn-web/src/components/PostInteractionQuestionnaireForm.tsx, greenfn-web/src/pages/AISummaryPage.tsx, TASKS.md, REVIEW/AI_INTERACTION_SUMMARIES.md, LOG.md
+- CHANGE_SUMMARY: Added a summary preview workflow on the AI Summary page that builds a draft from questionnaire input, lets the user edit the generated text before saving, supports validation for empty drafts, and provides explicit actions to save the edited summary or return to questionnaire editing; marked the corresponding frontend checklist item complete and updated review documentation.
+
+### LOG-0059
+
+- TASK: AI Interaction Summaries Implementation
+- SUBTASK: FRONTEND step 4 - explicit controls to skip AI generation
+- COMPLETED_AT: 2026-04-15 23:53:55 +08
+- FILES_CHANGED: greenfn-web/src/components/PostInteractionQuestionnaireForm.tsx, greenfn-web/src/pages/AISummaryPage.tsx, TASKS.md, REVIEW/AI_INTERACTION_SUMMARIES.md, LOG.md
+- CHANGE_SUMMARY: Implemented explicit user controls to skip AI generation in both questionnaire and preview stages, added a dedicated skipped-state panel with clear continuation options, and wired actions to either proceed without AI summary or return to generation; verified frontend build success and marked the final AI Interaction Summaries frontend checklist item completed.
+
+### LOG-0060
+
+- TASK: AI Interaction Summaries Implementation
+- SUBTASK: BACKEND step 1 - summary generation endpoint for structured and unstructured input
+- COMPLETED_AT: 2026-04-16 00:03:38 +08
+- FILES_CHANGED: greenfn/src/modules/ai/routes.js, TASKS.md, REVIEW/AI_INTERACTION_SUMMARIES.md, LOG.md
+- CHANGE_SUMMARY: Replaced scaffolded `POST /api/ai/summaries` route with functional summary generation flow that validates `contactId` and source-specific payloads, normalizes structured input into recall-focused text, supports non-structured input modes, and calls the AI service wrapper (`generateSummary`) to return summary text/model/usage metadata/timestamp; verified route syntax (`node --check`) and documented runtime validation commands, noting direct module load in this shell is blocked by required env vars.
+
+### LOG-0061
+
+- TASK: AI Interaction Summaries Implementation
+- SUBTASK: BACKEND step 2 - concise recall-focused prompt templates
+- COMPLETED_AT: 2026-04-16 00:22:37 +08
+- FILES_CHANGED: greenfn/src/modules/ai/service.js, TASKS.md, REVIEW/AI_INTERACTION_SUMMARIES.md, LOG.md
+- CHANGE_SUMMARY: Added mode-aware summary prompt templates in AI service for `structured`, `pasted-summary`, `unstructured`, `chat-transcript`, and `notes` inputs; enforced a concise recall output contract (fixed sections, limited bullets, no guessing) and integrated template guidance/emphasis into generated summary messages; validated AI service/routes syntax and diagnostics, then marked the prompt-template backend task complete.
+
+### LOG-0062
+
+- TASK: AI Interaction Summaries Implementation
+- SUBTASK: BACKEND step 3 - content safety checks and token/length limits
+- COMPLETED_AT: 2026-04-16 11:44:21 +08
+- FILES_CHANGED: greenfn/src/modules/ai/service.js, TASKS.md, REVIEW/AI_INTERACTION_SUMMARIES.md, LOG.md
+- CHANGE_SUMMARY: Added backend AI safety/limit safeguards by introducing blocked-content validation for high-risk categories, input token-limit enforcement, and strict input/output length checks for both summary and draft generation flows; wired validations into `generateSummary` and `draftMessage`, exported helper utilities for testability, validated syntax/diagnostics, and marked the corresponding backend checklist task complete.
+
+### LOG-0063
+
+- TASK: AI Interaction Summaries Implementation
+- SUBTASK: BACKEND step 4 - persist generated summary and metadata
+- COMPLETED_AT: 2026-04-16 11:59:30 +08
+- FILES_CHANGED: greenfn/src/modules/ai/routes.js, TASKS.md, REVIEW/AI_INTERACTION_SUMMARIES.md, LOG.md
+- CHANGE_SUMMARY: Updated `POST /api/ai/summaries` to persist generated summaries into `AiSummary` with metadata (`model`, `sourceMode`, `generatedAt`), return the persisted summary id, and optionally link the saved summary to an interaction (`interactionId`) by updating `Interaction.aiSummaryRecordId` and compatible legacy `aiSummary` payload; validated syntax and diagnostics, then marked the backend persistence task complete.
+
+### LOG-0064
+
+- TASK: AI Interaction Summaries Implementation
+- SUBTASK: DB step 1-4 - ai_summaries linkage, metadata, retention, and retrieval indexes
+- COMPLETED_AT: 2026-04-16 12:07:32 +08
+- FILES_CHANGED: greenfn/prisma/schema.prisma, greenfn/prisma/migrations/20260416095000_ai_summary_add_contact_metadata_retention/migration.sql, greenfn/src/modules/ai/routes.js, TASKS.md, REVIEW/AI_INTERACTION_SUMMARIES.md, LOG.md
+- CHANGE_SUMMARY: Completed the AI summaries DB checklist by expanding `AiSummary` with optional `contactId` linkage, `inputMode`, `modelMetadata`, `retentionUntil`, and `deletedAt`; added per-contact and retention indexes plus additive migration/backfill SQL; adopted AI summary route persistence to populate new DB fields and enforce interaction-contact consistency; validated backend syntax and Prisma client generation, then marked all AI summary DB tasks complete.
+
+### LOG-0065
+
+- TASK: AI Interaction Summaries Implementation
+- SUBTASK: DEPLOYMENT step 1 - AI endpoint rate limits and timeout strategy
+- COMPLETED_AT: 2026-04-16 12:21:55 +08
+- FILES_CHANGED: greenfn/src/config/env.js, greenfn/.env.example, greenfn/src/modules/ai/routes.js, TASKS.md, REVIEW/AI_INTERACTION_SUMMARIES.md, LOG.md
+- CHANGE_SUMMARY: Added deployment-focused control settings for AI endpoints by introducing env-driven timeout and rate-limit variables, wiring timeout into AI service initialization, and enforcing per-client rate limiting on summary generation requests with structured 429 responses; updated environment templates and marked the corresponding AI deployment checklist item complete.
+
+### LOG-0066
+
+- TASK: AI Interaction Summaries Implementation
+- SUBTASK: DEPLOYMENT step 2 - usage/cost monitoring dashboards for AI calls
+- COMPLETED_AT: 2026-04-16 12:31:59 +08
+- FILES_CHANGED: greenfn/src/modules/ai/logging.js, greenfn/src/modules/ai/routes.js, TASKS.md, REVIEW/AI_INTERACTION_SUMMARIES.md, LOG.md
+- CHANGE_SUMMARY: Added dashboard-ready AI monitoring by implementing in-memory usage/cost aggregation (totals, model/path breakdown, hourly series) from AI logging events and exposing `GET /api/ai/metrics` with configurable window; validated syntax and diagnostics, then marked the AI deployment monitoring task complete.
+
+### LOG-0067
+
+- TASK: AI Interaction Summaries Implementation
+- SUBTASK: DEPLOYMENT step 3 - fallback behavior when AI provider is unavailable
+- COMPLETED_AT: 2026-04-16 12:44:39 +0800
+- FILES_CHANGED: greenfn/src/modules/ai/routes.js, TASKS.md, REVIEW/AI_INTERACTION_SUMMARIES.md, LOG.md
+- CHANGE_SUMMARY: Added resilient fallback behavior for `POST /api/ai/summaries` by detecting provider-unavailable failures and generating a deterministic local summary (sectioned recall format) instead of failing the request; persisted fallback outputs with degraded metadata (`provider`, `degraded`, `fallbackReason`), added fallback telemetry event logging, validated route syntax/diagnostics, and marked the final AI deployment checklist item complete.
+
+### LOG-0068
+
+- TASK: Interaction History + AI Summary Runtime Persistence Fix
+- SUBTASK: Wire frontend save flows to backend APIs and validate database writes
+- COMPLETED_AT: 2026-04-16 15:01:11 +0800
+- FILES_CHANGED: greenfn-web/src/pages/InteractionHistoryPage.tsx, greenfn-web/src/pages/AISummaryPage.tsx, REVIEW/INTERACTION_HISTORY.md, REVIEW/AI_INTERACTION_SUMMARIES.md, LOG.md
+- CHANGE_SUMMARY: Replaced local-only Interaction History and AI Summary save behavior with real backend API persistence by wiring contact-scoped timeline reads (`GET /api/interactions`), interaction creates (`POST /api/interactions`), and AI summary generation/persistence (`POST /api/ai/summaries`) in frontend pages; validated frontend build, applied pending Prisma migration via `prisma migrate deploy`, and confirmed end-to-end DB deltas (`Interaction` +1, `AiSummary` +1) from live API calls.
+
+### LOG-0069
+
+- TASK: Prisma Migration Reliability
+- SUBTASK: Add forward-only corrective migration for InteractionType required enum values
+- COMPLETED_AT: 2026-04-16 15:19:20 +0800
+- FILES_CHANGED: greenfn/prisma/migrations/20260416150800_interaction_type_enum_values_forward_fix/migration.sql, LOG.md
+- CHANGE_SUMMARY: Added and applied a new forward-only migration that idempotently ensures `InteractionType` includes `WHATSAPP_DM` and `GENERAL_NOTE` using quoted regtype checks, while keeping existing migration files unchanged for merge safety; validated with `prisma migrate deploy` and confirmed schema is up to date via `prisma migrate status`.

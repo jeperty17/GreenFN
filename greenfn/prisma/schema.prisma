@@ -1,6 +1,5 @@
 generator client {
   provider = "prisma-client-js"
-  output   = "../generated/prisma"
 }
 
 datasource db {
@@ -45,6 +44,7 @@ model Contact {
   notes String?
 
   interactions  Interaction[]
+  aiSummaries   AiSummary[]
   nextSteps     NextStep[]
   conversations Conversation[]
   policies      Policy[]
@@ -107,14 +107,26 @@ model Interaction {
 model AiSummary {
   id String @id @default(cuid())
 
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
   summaryText String
+  inputMode  String?
   model       String?
+  modelMetadata Json?
   sourceMode  String?
   generatedAt DateTime @default(now())
+
+  retentionUntil DateTime?
+  deletedAt      DateTime?
 
   interactions Interaction[]
 
   createdAt DateTime @default(now())
+
+  @@index([contactId, generatedAt])
+  @@index([contactId, deletedAt, generatedAt])
+  @@index([retentionUntil])
 }
 
 model NextStep {

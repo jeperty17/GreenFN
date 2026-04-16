@@ -11,7 +11,7 @@ import { Input } from "./ui/input";
 import { Label } from "./ui/label";
 import { Textarea } from "./ui/textarea";
 
-type InputMode =
+export type InputMode =
   | "structured"
   | "pasted-summary"
   | "unstructured"
@@ -37,7 +37,7 @@ type ChatTranscriptState = {
   platform: string;
 };
 
-type FormState = {
+export type FormState = {
   mode: InputMode;
   structured: StructuredFieldsState;
   pastedSummary: PastedSummaryState;
@@ -47,10 +47,15 @@ type FormState = {
 
 type Props = {
   onSubmit?: (data: FormState) => void;
+  onSkip?: (data: FormState) => void;
   isLoading?: boolean;
 };
 
-function PostInteractionQuestionnaireForm({ onSubmit, isLoading }: Props) {
+function PostInteractionQuestionnaireForm({
+  onSubmit,
+  onSkip,
+  isLoading,
+}: Props) {
   const [formState, setFormState] = useState<FormState>({
     mode: "structured",
     structured: {
@@ -128,6 +133,15 @@ function PostInteractionQuestionnaireForm({ onSubmit, isLoading }: Props) {
     setSuccess(
       "Questionnaire submitted. Processing for AI summary generation...",
     );
+  }
+
+  function handleSkip() {
+    setError("");
+    setSuccess("AI generation skipped for this interaction.");
+
+    if (onSkip) {
+      onSkip(formState);
+    }
   }
 
   return (
@@ -410,8 +424,13 @@ function PostInteractionQuestionnaireForm({ onSubmit, isLoading }: Props) {
             <Button type="submit" disabled={isLoading}>
               {isLoading ? "Processing..." : "Generate Summary"}
             </Button>
-            <Button type="button" variant="outline" disabled={isLoading}>
-              Skip for Now
+            <Button
+              type="button"
+              variant="outline"
+              disabled={isLoading}
+              onClick={handleSkip}
+            >
+              Skip AI for This Interaction
             </Button>
           </div>
 

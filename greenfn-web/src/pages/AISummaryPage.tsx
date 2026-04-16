@@ -1,5 +1,9 @@
 import { useEffect, useState } from "react";
-import PostInteractionQuestionnaireForm from "../components/PostInteractionQuestionnaireForm";
+import PostInteractionQuestionnaireForm, {
+  type FormState,
+} from "../components/PostInteractionQuestionnaireForm";
+import { API_BASE_URL } from "../config/env";
+import { Button } from "../components/ui/button";
 import {
   Card,
   CardContent,
@@ -8,6 +12,58 @@ import {
   CardTitle,
 } from "../components/ui/card";
 import { Badge } from "../components/ui/badge";
+import { Label } from "../components/ui/label";
+import { Textarea } from "../components/ui/textarea";
+
+type SummaryPreviewState = {
+  summaryId: string | null;
+  generatedSummary: string;
+  editableSummary: string;
+  sourceMode: FormState["mode"];
+  degraded: boolean;
+};
+
+type SkipState = {
+  sourceMode: FormState["mode"];
+  capturedAt: string;
+};
+
+function buildSummaryPreviewFromFormData(formData: FormState): string {
+  if (formData.mode === "structured") {
+    const { keyPoints, clientNeeds, nextSteps, followUpAction } =
+      formData.structured;
+
+    return [
+      "Client interaction summary:",
+      keyPoints.trim(),
+      "",
+      "Primary needs/concerns:",
+      clientNeeds.trim(),
+      "",
+      "Agreed next steps:",
+      nextSteps.trim(),
+      followUpAction.trim()
+        ? `Advisor follow-up action: ${followUpAction.trim()}`
+        : "",
+    ]
+      .filter(Boolean)
+      .join("\n");
+  }
+
+  if (formData.mode === "pasted-summary") {
+    return formData.pastedSummary.summary.trim();
+  }
+
+  if (formData.mode === "unstructured") {
+    return formData.unstructured.notes.trim();
+  }
+
+  return [
+    `Conversation source: ${formData.chatTranscript.platform}`,
+    "",
+    formData.chatTranscript.transcript.trim(),
+  ].join("\n");
+}
 
 function AISummaryPage() {
   const [contacts, setContacts] = useState<
@@ -15,6 +71,13 @@ function AISummaryPage() {
   >([]);
   const [selectedContactId, setSelectedContactId] = useState<string>("");
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
+  const [summaryPreview, setSummaryPreview] =
+    useState<SummaryPreviewState | null>(null);
+  const [skipState, setSkipState] = useState<SkipState | null>(null);
+  const [previewError, setPreviewError] = useState("");
+  const [saveSuccessMessage, setSaveSuccessMessage] = useState("");
+  const [skipSuccessMessage, setSkipSuccessMessage] = useState("");
+  const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -24,7 +87,7 @@ function AISummaryPage() {
 
       try {
         const response = await fetch(
-          `${import.meta.env.VITE_API_BASE_URL || "http://localhost:3001"}/api/contacts?page=1&pageSize=50`,
+          `${API_BASE_URL}/api/contacts?page=1&pageSize=50`,
           { signal: abortController.signal },
         );
 
@@ -49,6 +112,114 @@ function AISummaryPage() {
       abortController.abort();
     };
   }, []);
+
+  async function handleGenerateSummaryPreview(formData: FormState) {
+    if (!selectedContactId) {
+      setPreviewError("Please select a contact before generating a summary.");
+      return;
+    }
+
+    setSkipState(null);
+    setSkipSuccessMessage("");
+    setSaveSuccessMessage("");
+    setIsGeneratingSummary(true);
+
+    try {
+      const inputPreview = buildSummaryPreviewFromFormData(formData);
+      if (!inputPreview.trim()) {
+        throw new Error("Could not build summary input from form data.");
+      }
+
+      const requestBody =
+        formData.mode === "structured"
+          ? {
+              contactId: selectedContactId,
+              sourceMode: "structured",
+              structuredInput: {
+                keyPoints: formData.structured.keyPoints,
+                clientNeeds: formData.structured.clientNeeds,
+                nextSteps: formData.structured.nextSteps,
+                followUpAction: formData.structured.followUpAction,
+              },
+            }
+          : {
+              contactId: selectedContactId,
+              sourceMode: formData.mode,
+              input:
+                formData.mode === "pasted-summary"
+                  ? formData.pastedSummary.summary
+                  : formData.mode === "unstructured"
+                    ? formData.unstructured.notes
+                    : `Platform: ${formData.chatTranscript.platform}\n\n${formData.chatTranscript.transcript}`,
+            };
+
+      const response = await fetch(`${API_BASE_URL}/api/ai/summaries`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestBody),
+      });
+
+      if (!response.ok) {
+        const errorPayload = await response.json().catch(() => null);
+        const apiErrorMessage = errorPayload?.error?.message;
+        throw new Error(
+          apiErrorMessage || `Failed to generate summary (${response.status})`,
+        );
+      }
+
+      const payload = await response.json();
+      const summary = payload?.summary;
+
+      if (!summary?.text) {
+        throw new Error("Summary generation returned an empty response.");
+      }
+
+      setPreviewError("");
+      setSummaryPreview({
+        summaryId: summary.id || null,
+        generatedSummary: summary.text,
+        editableSummary: summary.text,
+        sourceMode: formData.mode,
+        degraded: Boolean(summary.degraded),
+      });
+    } catch (error) {
+      setPreviewError(
+        (error as Error).message || "Failed to generate summary.",
+      );
+      setSummaryPreview(null);
+    } finally {
+      setIsGeneratingSummary(false);
+    }
+  }
+
+  function handleSkipAiGeneration(formData: FormState) {
+    setSummaryPreview(null);
+    setPreviewError("");
+    setSaveSuccessMessage("");
+    setSkipState({
+      sourceMode: formData.mode,
+      capturedAt: new Date().toISOString(),
+    });
+    setSkipSuccessMessage(
+      "AI generation skipped. You can proceed without a summary or return to generate one.",
+    );
+  }
+
+  function handleSaveSummaryPreview() {
+    if (!summaryPreview || !summaryPreview.editableSummary.trim()) {
+      setPreviewError("Summary text cannot be empty before saving.");
+      return;
+    }
+
+    setPreviewError("");
+    setSaveSuccessMessage(
+      summaryPreview.summaryId
+        ? `Summary is already saved in database (ID: ${summaryPreview.summaryId}).`
+        : "Summary generated, but no persisted summary ID was returned.",
+    );
+  }
 
   return (
     <section className="page-shell space-y-6">
@@ -96,12 +267,155 @@ function AISummaryPage() {
         </CardContent>
       </Card>
 
-      {selectedContactId && (
+      {selectedContactId && !summaryPreview && !skipState && (
         <PostInteractionQuestionnaireForm
-          onSubmit={(data) => {
-            console.log("Questionnaire submitted:", data);
-          }}
+          onSubmit={handleGenerateSummaryPreview}
+          onSkip={handleSkipAiGeneration}
+          isLoading={isGeneratingSummary}
         />
+      )}
+
+      {selectedContactId && summaryPreview && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-base">Summary Preview</CardTitle>
+            <CardDescription>
+              Review and edit this generated summary before saving.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">
+                Source mode: {summaryPreview.sourceMode}
+              </Badge>
+              <Badge variant="secondary">Editable draft</Badge>
+              {summaryPreview.degraded && (
+                <Badge variant="outline">Provider fallback used</Badge>
+              )}
+            </div>
+
+            <div className="field-stack">
+              <Label htmlFor="summaryPreview">Generated Summary</Label>
+              <Textarea
+                id="summaryPreview"
+                value={summaryPreview.editableSummary}
+                rows={12}
+                onChange={(event) =>
+                  setSummaryPreview((currentState) =>
+                    currentState
+                      ? {
+                          ...currentState,
+                          editableSummary: event.target.value,
+                        }
+                      : currentState,
+                  )
+                }
+              />
+              <p className="text-xs text-muted-foreground">
+                Generated length: {summaryPreview.generatedSummary.length} chars
+                {" • "}Current draft length:{" "}
+                {summaryPreview.editableSummary.length}
+                chars
+              </p>
+            </div>
+
+            {previewError && (
+              <p className="text-sm text-destructive">{previewError}</p>
+            )}
+            {saveSuccessMessage && (
+              <p className="text-sm text-emerald-700">{saveSuccessMessage}</p>
+            )}
+
+            <div className="flex gap-3">
+              <Button type="button" onClick={handleSaveSummaryPreview}>
+                Save Summary
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() =>
+                  handleSkipAiGeneration({
+                    mode: summaryPreview.sourceMode,
+                    structured: {
+                      keyPoints: "",
+                      clientNeeds: "",
+                      nextSteps: "",
+                      followUpAction: "",
+                    },
+                    pastedSummary: { summary: "" },
+                    unstructured: { notes: "" },
+                    chatTranscript: { transcript: "", platform: "other" },
+                  })
+                }
+              >
+                Skip AI and Continue
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setSummaryPreview(null);
+                  setPreviewError("");
+                  setSaveSuccessMessage("");
+                }}
+              >
+                Back to Questionnaire
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
+      {selectedContactId && skipState && (
+        <Card className="border-amber-300 bg-amber-50">
+          <CardHeader>
+            <CardTitle className="text-base">AI Generation Skipped</CardTitle>
+            <CardDescription>
+              You chose to skip AI for this interaction. You can proceed without
+              a summary or return to generate one.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center gap-2">
+              <Badge variant="outline">
+                Source mode: {skipState.sourceMode}
+              </Badge>
+              <Badge variant="secondary">No AI summary</Badge>
+            </div>
+
+            {skipSuccessMessage && (
+              <p className="text-sm text-amber-800">{skipSuccessMessage}</p>
+            )}
+
+            <p className="text-xs text-muted-foreground">
+              Skipped at:{" "}
+              {new Date(skipState.capturedAt).toLocaleString("en-SG")}
+            </p>
+
+            <div className="flex gap-3">
+              <Button
+                type="button"
+                onClick={() =>
+                  setSkipSuccessMessage(
+                    "Interaction recorded without AI summary. Backend persistence will be wired in upcoming API steps.",
+                  )
+                }
+              >
+                Proceed Without AI Summary
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setSkipState(null);
+                  setSkipSuccessMessage("");
+                }}
+              >
+                Generate AI Summary Instead
+              </Button>
+            </div>
+          </CardContent>
+        </Card>
       )}
 
       <Card className="bg-blue-50">
