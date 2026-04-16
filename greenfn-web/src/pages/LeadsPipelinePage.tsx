@@ -16,6 +16,7 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE_URL } from "../config/env";
 import { Badge } from "../components/ui/badge";
+import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
 import PipelineBoard, {
   type PipelineStage,
@@ -25,6 +26,7 @@ import StageTransitionModal, {
   type PendingTransition,
   type TransitionCompletionPayload,
 } from "../components/pipeline/StageTransitionModal";
+import ManageStagesModal from "../components/pipeline/ManageStagesModal";
 
 interface ContactListItem {
   id: string;
@@ -71,6 +73,12 @@ function LeadsPipelinePage() {
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
+
+  // Incrementing this triggers a full pipeline re-fetch (used after stage mutations).
+  const [refreshTrigger, setRefreshTrigger] = useState(0);
+
+  // Controls the Manage Stages modal.
+  const [isManageOpen, setIsManageOpen] = useState(false);
 
   // The contact currently being dragged — drives the DragOverlay.
   const [activeContact, setActiveContact] = useState<PipelineContact | null>(
@@ -196,7 +204,7 @@ function LeadsPipelinePage() {
     return () => {
       abortController.abort();
     };
-  }, []);
+  }, [refreshTrigger]);
 
   function handleDragStart(event: DragStartEvent) {
     // Store the contact data so the DragOverlay can render it.
@@ -384,12 +392,21 @@ function LeadsPipelinePage() {
 
   return (
     <section className="page-section space-y-6">
-      <div>
-        <h2>Leads Pipeline</h2>
-        <p className="field-hint">
-          Contacts grouped by stage. Drag cards between columns to progress
-          leads.
-        </p>
+      <div className="flex items-start justify-between gap-4">
+        <div>
+          <h2>Leads Pipeline</h2>
+          <p className="field-hint">
+            Contacts grouped by stage. Drag cards between columns to progress
+            leads.
+          </p>
+        </div>
+        <Button
+          variant="outline"
+          size="sm"
+          onClick={() => setIsManageOpen(true)}
+        >
+          Manage Stages
+        </Button>
       </div>
 
       <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
@@ -442,6 +459,13 @@ function LeadsPipelinePage() {
         pendingTransition={pendingTransition}
         onComplete={handleTransitionComplete}
         onUndo={handleTransitionUndo}
+      />
+
+      <ManageStagesModal
+        open={isManageOpen}
+        stages={stages}
+        onClose={() => setIsManageOpen(false)}
+        onStagesChanged={() => setRefreshTrigger((t) => t + 1)}
       />
     </section>
   );

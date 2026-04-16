@@ -4,8 +4,8 @@
  * urgency prop is forwarded to each TaskCard for colour theming.
  */
 
-import TaskCard from './TaskCard';
-import type { Task, TaskBucket } from './types';
+import TaskCard from "./TaskCard";
+import type { Task, TaskBucket } from "./types";
 
 interface TaskSectionProps {
   title: string;
@@ -13,16 +13,24 @@ interface TaskSectionProps {
   urgency: TaskBucket;
   onMarkDone: (taskId: string) => Promise<void>;
   onReschedule: (taskId: string, newDueAt: string) => Promise<void>;
+  onDelete: (taskId: string) => Promise<void>;
 }
 
-function TaskSection({ title, tasks, urgency, onMarkDone, onReschedule }: TaskSectionProps) {
+function TaskSection({
+  title,
+  tasks,
+  urgency,
+  onMarkDone,
+  onReschedule,
+  onDelete,
+}: TaskSectionProps) {
   // Section heading colour matches the urgency theme
   const headingClass =
-    urgency === 'overdue'
-      ? 'text-red-600 dark:text-red-400'
-      : urgency === 'dueToday'
-      ? 'text-amber-600 dark:text-amber-400'
-      : 'text-foreground';
+    urgency === "overdue"
+      ? "text-red-600 dark:text-red-400"
+      : urgency === "dueToday"
+        ? "text-amber-600 dark:text-amber-400"
+        : "text-foreground";
 
   return (
     <section className="space-y-3">
@@ -46,6 +54,7 @@ function TaskSection({ title, tasks, urgency, onMarkDone, onReschedule }: TaskSe
               urgency={urgency}
               onMarkDone={onMarkDone}
               onReschedule={onReschedule}
+              onDelete={onDelete}
             />
           ))}
         </div>

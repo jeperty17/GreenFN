@@ -1,17 +1,21 @@
 /**
  * Tasks page — central task management view.
+ * Two tabs: "List" (overdue / due today / upcoming sections) and "Calendar"
+ * (monthly DayPicker view of all OPEN tasks).
  * Fetches all open NextSteps from GET /api/tasks and renders three sections:
  * Overdue (red), Due Today (amber), Upcoming (neutral).
  * Supports marking tasks as done, rescheduling, and adding new tasks.
  */
 
-import { useEffect, useState } from 'react';
-import { toast } from 'sonner';
-import { API_BASE_URL } from '../config/env';
-import { Button } from '../components/ui/button';
-import TaskSection from '../components/tasks/TaskSection';
-import AddTaskModal from '../components/tasks/AddTaskModal';
-import type { Task, TaskBucket } from '../components/tasks/types';
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
+import { API_BASE_URL } from "../config/env";
+import { Button } from "../components/ui/button";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
+import TaskSection from "../components/tasks/TaskSection";
+import AddTaskModal from "../components/tasks/AddTaskModal";
+import CalendarView from "../components/tasks/CalendarView";
+import type { Task, TaskBucket } from "../components/tasks/types";
 
 interface TasksApiResponse {
   overdue: Task[];
@@ -25,16 +29,20 @@ interface TasksApiResponse {
  */
 function categorizeDueDate(dueAt: string): TaskBucket | null {
   const now = new Date();
-  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfToday = new Date(
+    now.getFullYear(),
+    now.getMonth(),
+    now.getDate(),
+  );
   const startOfTomorrow = new Date(startOfToday);
   startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
   const endOfUpcoming = new Date(startOfToday);
   endOfUpcoming.setDate(endOfUpcoming.getDate() + 8); // today+1 through today+7
 
   const date = new Date(dueAt);
-  if (date < startOfToday) return 'overdue';
-  if (date < startOfTomorrow) return 'dueToday';
-  if (date < endOfUpcoming) return 'upcoming';
+  if (date < startOfToday) return "overdue";
+  if (date < startOfTomorrow) return "dueToday";
+  if (date < endOfUpcoming) return "upcoming";
   return null;
 }
 
@@ -49,12 +57,12 @@ function TasksPage() {
   const [dueToday, setDueToday] = useState<Task[]>([]);
   const [upcoming, setUpcoming] = useState<Task[]>([]);
   const [isLoading, setIsLoading] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   async function fetchTasks(signal?: AbortSignal) {
     setIsLoading(true);
-    setErrorMessage('');
+    setErrorMessage("");
     try {
       const res = await fetch(`${API_BASE_URL}/api/tasks`, { signal });
       if (!res.ok) throw new Error(`Failed to load tasks (${res.status})`);
@@ -63,8 +71,8 @@ function TasksPage() {
       setDueToday(data.dueToday);
       setUpcoming(data.upcoming);
     } catch (err) {
-      if ((err as Error).name === 'AbortError') return;
-      setErrorMessage((err as Error).message || 'Failed to load tasks');
+      if ((err as Error).name === "AbortError") return;
+      setErrorMessage((err as Error).message || "Failed to load tasks");
     } finally {
       setIsLoading(false);
     }
@@ -85,27 +93,39 @@ function TasksPage() {
 
   async function handleMarkDone(taskId: string) {
     const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ status: 'DONE' }),
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ status: "DONE" }),
     });
     if (!res.ok) {
-      toast.error('Failed to mark task as done.');
+      toast.error("Failed to mark task as done.");
       return;
     }
     removeTask(taskId);
-    toast.success('Task marked as done.');
+    toast.success("Task marked as done.");
+  }
+
+  async function handleDelete(taskId: string) {
+    const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
+      method: "DELETE",
+    });
+    if (!res.ok) {
+      toast.error("Failed to delete task.");
+      return;
+    }
+    removeTask(taskId);
+    toast.success("Task deleted.");
   }
 
   async function handleReschedule(taskId: string, newDueAt: string) {
     // newDueAt is a "YYYY-MM-DD" string from the date input
     const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
-      method: 'PATCH',
-      headers: { 'Content-Type': 'application/json' },
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ dueAt: newDueAt }),
     });
     if (!res.ok) {
-      toast.error('Failed to reschedule task.');
+      toast.error("Failed to reschedule task.");
       return;
     }
 
@@ -123,20 +143,20 @@ function TasksPage() {
     const updatedTask: Task = { ...task, dueAt: newDueAt };
     const newBucket = categorizeDueDate(newDueAt);
 
-    if (newBucket === 'overdue') {
+    if (newBucket === "overdue") {
       setOverdue((prev) => sortByDueAt([...prev, updatedTask]));
-    } else if (newBucket === 'dueToday') {
+    } else if (newBucket === "dueToday") {
       setDueToday((prev) => [...prev, updatedTask]);
-    } else if (newBucket === 'upcoming') {
+    } else if (newBucket === "upcoming") {
       setUpcoming((prev) => sortByDueAt([...prev, updatedTask]));
     }
     // null bucket (beyond window) — task is simply removed from view
 
-    toast.success('Task rescheduled.');
+    toast.success("Task rescheduled.");
   }
 
   return (
-    <section className="page-section space-y-8">
+    <section className="page-section space-y-6">
       {/* Page header */}
       <div className="flex items-start justify-between">
         <div>
@@ -146,40 +166,58 @@ function TasksPage() {
         <Button onClick={() => setIsAddModalOpen(true)}>Add Task</Button>
       </div>
 
-      {/* Body */}
-      {isLoading ? (
-        <p className="py-16 text-center text-sm text-muted-foreground">
-          Loading tasks…
-        </p>
-      ) : errorMessage ? (
-        <div className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-          {errorMessage}
-        </div>
-      ) : (
-        <div className="space-y-8">
-          <TaskSection
-            title="Overdue"
-            tasks={overdue}
-            urgency="overdue"
-            onMarkDone={handleMarkDone}
-            onReschedule={handleReschedule}
-          />
-          <TaskSection
-            title="Due Today"
-            tasks={dueToday}
-            urgency="dueToday"
-            onMarkDone={handleMarkDone}
-            onReschedule={handleReschedule}
-          />
-          <TaskSection
-            title="Upcoming"
-            tasks={upcoming}
-            urgency="upcoming"
-            onMarkDone={handleMarkDone}
-            onReschedule={handleReschedule}
-          />
-        </div>
-      )}
+      {/* Tabs */}
+      <Tabs defaultValue="list">
+        <TabsList>
+          <TabsTrigger value="list">List</TabsTrigger>
+          <TabsTrigger value="calendar">Calendar</TabsTrigger>
+        </TabsList>
+
+        {/* List tab — existing overdue / due today / upcoming view */}
+        <TabsContent value="list">
+          {isLoading ? (
+            <p className="py-16 text-center text-sm text-muted-foreground">
+              Loading tasks…
+            </p>
+          ) : errorMessage ? (
+            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+              {errorMessage}
+            </div>
+          ) : (
+            <div className="space-y-8">
+              <TaskSection
+                title="Overdue"
+                tasks={overdue}
+                urgency="overdue"
+                onMarkDone={handleMarkDone}
+                onReschedule={handleReschedule}
+                onDelete={handleDelete}
+              />
+              <TaskSection
+                title="Due Today"
+                tasks={dueToday}
+                urgency="dueToday"
+                onMarkDone={handleMarkDone}
+                onReschedule={handleReschedule}
+                onDelete={handleDelete}
+              />
+              <TaskSection
+                title="Upcoming"
+                tasks={upcoming}
+                urgency="upcoming"
+                onMarkDone={handleMarkDone}
+                onReschedule={handleReschedule}
+                onDelete={handleDelete}
+              />
+            </div>
+          )}
+        </TabsContent>
+
+        {/* Calendar tab — monthly DayPicker view of all OPEN tasks */}
+        <TabsContent value="calendar">
+          <CalendarView />
+        </TabsContent>
+      </Tabs>
 
       <AddTaskModal
         isOpen={isAddModalOpen}

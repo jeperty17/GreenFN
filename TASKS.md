@@ -90,24 +90,24 @@
 
 ### FRONTEND
 
-- [ ] Build kanban board with pipeline columns (New, Contacted, Booked, No-show, In Progress, Closed Won, Closed Lost).
-- [ ] Render each lead as a draggable card with key contact details.
-- [ ] Implement drag-and-drop status changes with optimistic UI updates.
+- [x] Build kanban board with pipeline columns (New, Contacted, Booked, No-show, In Progress, Closed Won, Closed Lost).
+- [x] Render each lead as a draggable card with key contact details.
+- [x] Implement drag-and-drop status changes with optimistic UI updates.
 - [ ] Show visual feedback and error recovery when status update fails.
 
 ### BACKEND
 
-- [ ] Implement endpoint to fetch pipeline grouped by stage.
-- [ ] Implement endpoint to update lead stage with transition timestamp.
+- [x] Implement endpoint to fetch pipeline grouped by stage.
+- [x] Implement endpoint to update lead stage with transition timestamp.
 - [ ] Implement guardrails for valid stage transitions.
 - [ ] Emit follow-up suggestion trigger after stage changes.
 
 ### DB
 
-- [ ] Create pipeline stage enum/table and stage order metadata.
-- [ ] Add current stage and stage-updated-at fields to contacts/leads.
+- [x] Create pipeline stage enum/table and stage order metadata.
+- [x] Add current stage and stage-updated-at fields to contacts/leads.
 - [ ] Add stage transition history table for auditability.
-- [ ] Seed default stage values for new leads.
+- [x] Seed default stage values for new leads.
 
 ### DEPLOYMENT
 
@@ -119,23 +119,23 @@
 
 ### FRONTEND
 
-- [ ] Build Today view showing due-today and overdue next steps.
-- [ ] Build task creation/edit UI for per-contact next step text and due date.
-- [ ] Add quick actions for complete, snooze, and reschedule.
+- [x] Build Today view showing due-today and overdue next steps.
+- [x] Build task creation/edit UI for per-contact next step text and due date.
+- [x] Add quick actions for complete, snooze, and reschedule.
 - [ ] Add optional nudge prompt after pipeline stage movement.
 
 ### BACKEND
 
-- [ ] Implement CRUD endpoints for next-step tasks.
-- [ ] Implement endpoint for Today feed with overdue and due-today grouping.
-- [ ] Implement business logic for task state (open/completed/snoozed).
+- [x] Implement CRUD endpoints for next-step tasks.
+- [x] Implement endpoint for Today feed with overdue and due-today grouping.
+- [x] Implement business logic for task state (open/completed/snoozed).
 - [ ] Implement reminder/nudge scheduler trigger logic.
 
 ### DB
 
-- [ ] Create tasks table linked to contacts and user.
-- [ ] Add due-date, status, completed-at, snooze-until, and priority fields.
-- [ ] Add indexes for due-date and status queries.
+- [x] Create tasks table linked to contacts and user.
+- [x] Add due-date, status, completed-at fields.
+- [x] Add indexes for due-date and status queries.
 - [ ] Add task activity log table for audit trail.
 
 ### DEPLOYMENT

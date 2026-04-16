@@ -11,21 +11,13 @@ const ADVISOR_ID = "seed-user-001";
 const ALLOWED_STATUSES = new Set(["OPEN", "DONE", "CANCELED"]);
 
 // GET /api/tasks
-// Returns all OPEN NextSteps (with a dueAt) for the advisor's contacts,
+// Default: returns all OPEN NextSteps (with a dueAt) for the advisor's contacts,
 // grouped into overdue / dueToday / upcoming (next 7 days after today).
-// Tasks with no dueAt are excluded from all buckets.
-router.get("/", async (_req, res, next) => {
+// ?view=calendar: returns ALL OPEN tasks regardless of due date as a flat array { tasks: [...] }
+// Tasks with no dueAt are excluded from all responses.
+router.get("/", async (req, res, next) => {
   try {
-    const now = new Date();
-    const startOfToday = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    );
-    const startOfTomorrow = new Date(startOfToday);
-    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
-    const endOfUpcoming = new Date(startOfToday);
-    endOfUpcoming.setDate(endOfUpcoming.getDate() + 8); // covers today+1 through today+7
+    const isCalendar = req.query.view === "calendar";
 
     const tasks = await prisma.nextStep.findMany({
       where: {
@@ -46,22 +38,40 @@ router.get("/", async (_req, res, next) => {
       orderBy: { dueAt: "asc" },
     });
 
+    const formatTask = (task) => ({
+      id: task.id,
+      title: task.title,
+      description: task.description,
+      dueAt: task.dueAt,
+      status: task.status,
+      contactId: task.contactId,
+      contactName: task.contact.fullName,
+      stageName: task.contact.stage?.name ?? null,
+    });
+
+    // Calendar view: return all OPEN tasks as a flat array
+    if (isCalendar) {
+      return res.json({ tasks: tasks.map(formatTask) });
+    }
+
+    // List view: bucket tasks into overdue / dueToday / upcoming
+    const now = new Date();
+    const startOfToday = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+    );
+    const startOfTomorrow = new Date(startOfToday);
+    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
+    const endOfUpcoming = new Date(startOfToday);
+    endOfUpcoming.setDate(endOfUpcoming.getDate() + 8); // covers today+1 through today+7
+
     const overdue = [];
     const dueToday = [];
     const upcoming = [];
 
     for (const task of tasks) {
-      const data = {
-        id: task.id,
-        title: task.title,
-        description: task.description,
-        dueAt: task.dueAt,
-        status: task.status,
-        contactId: task.contactId,
-        contactName: task.contact.fullName,
-        stageName: task.contact.stage?.name ?? null,
-      };
-
+      const data = formatTask(task);
       if (task.dueAt < startOfToday) {
         overdue.push(data);
       } else if (task.dueAt < startOfTomorrow) {
@@ -91,43 +101,43 @@ router.post(
     return errors;
   }),
   async (req, res, next) => {
-  try {
-    const { contactId, title, description, dueAt } = req.body;
+    try {
+      const { contactId, title, description, dueAt } = req.body;
 
-    const parsedDueAt = new Date(dueAt);
-    if (isNaN(parsedDueAt.getTime())) {
-      throw httpError(400, "Validation failed", [
-        { field: "dueAt", message: "dueAt must be a valid date" },
-      ]);
+      const parsedDueAt = new Date(dueAt);
+      if (isNaN(parsedDueAt.getTime())) {
+        throw httpError(400, "Validation failed", [
+          { field: "dueAt", message: "dueAt must be a valid date" },
+        ]);
+      }
+
+      const contact = await prisma.contact.findUnique({
+        where: { id: contactId },
+        select: { advisorId: true },
+      });
+      if (!contact) {
+        throw httpError(404, "Contact not found");
+      }
+      if (contact.advisorId !== ADVISOR_ID) {
+        throw httpError(403, "Forbidden");
+      }
+
+      // create task with status OPEN
+      const task = await prisma.nextStep.create({
+        data: {
+          contactId,
+          title,
+          description,
+          dueAt: parsedDueAt,
+          status: "OPEN",
+        },
+      });
+
+      res.status(201).json({ task });
+    } catch (error) {
+      next(error);
     }
-
-    const contact = await prisma.contact.findUnique({
-      where: { id: contactId },
-      select: { advisorId: true },
-    });
-    if (!contact) {
-      throw httpError(404, "Contact not found");
-    }
-    if (contact.advisorId !== ADVISOR_ID) {
-      throw httpError(403, "Forbidden");
-    }
-
-    // create task with status OPEN
-    const task = await prisma.nextStep.create({
-      data: {
-        contactId,
-        title,
-        description,
-        dueAt: parsedDueAt,
-        status: "OPEN",
-      },
-    });
-
-    res.status(201).json({ task });
-  } catch (error) {
-    next(error);
-  }
-},
+  },
 );
 
 // PATCH /api/tasks/:taskId
@@ -139,16 +149,25 @@ router.patch(
     const errors = [];
 
     // at least one field must be provided
-    if (status === undefined && dueAt === undefined && title === undefined && description === undefined) {
+    if (
+      status === undefined &&
+      dueAt === undefined &&
+      title === undefined &&
+      description === undefined
+    ) {
       errors.push({ field: "body", message: "at least one field is required" });
       return errors;
     }
 
     if (status !== undefined && !ALLOWED_STATUSES.has(status)) {
-      errors.push({ field: "status", message: `status must be one of: ${[...ALLOWED_STATUSES].join(", ")}` });
+      errors.push({
+        field: "status",
+        message: `status must be one of: ${[...ALLOWED_STATUSES].join(", ")}`,
+      });
     }
     if (title !== undefined) requiredString(title, "title", errors);
-    if (description !== undefined) requiredString(description, "description", errors);
+    if (description !== undefined)
+      requiredString(description, "description", errors);
     if (dueAt !== undefined && isNaN(new Date(dueAt).getTime())) {
       errors.push({ field: "dueAt", message: "dueAt must be a valid date" });
     }
@@ -156,32 +175,63 @@ router.patch(
     return errors;
   }),
   async (req, res, next) => {
+    try {
+      const { taskId } = req.params;
+      const { status, dueAt, title, description } = req.body;
+
+      let parsedDueAt;
+      if (dueAt !== undefined) parsedDueAt = new Date(dueAt);
+
+      const data = {};
+      if (status !== undefined) {
+        data.status = status;
+        if (status === "DONE") data.completedAt = new Date();
+      }
+      if (parsedDueAt !== undefined) data.dueAt = parsedDueAt;
+      if (title !== undefined) data.title = title;
+      if (description !== undefined) data.description = description;
+
+      const task = await prisma.nextStep.update({
+        where: { id: taskId },
+        data,
+      });
+
+      res.json({ task });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
+
+// DELETE /api/tasks/:taskId
+// Permanently deletes a NextStep owned by the advisor.
+router.delete("/:taskId", async (req, res, next) => {
   try {
     const { taskId } = req.params;
-    const { status, dueAt, title, description } = req.body;
 
-    let parsedDueAt;
-    if (dueAt !== undefined) parsedDueAt = new Date(dueAt);
-
-    const data = {};
-    if (status !== undefined) {
-      data.status = status;
-      if (status === "DONE") data.completedAt = new Date();
-    }
-    if (parsedDueAt !== undefined) data.dueAt = parsedDueAt;
-    if (title !== undefined) data.title = title;
-    if (description !== undefined) data.description = description;
-
-    const task = await prisma.nextStep.update({
+    const task = await prisma.nextStep.findUnique({
       where: { id: taskId },
-      data,
+      select: {
+        id: true,
+        contact: {
+          select: { advisorId: true },
+        },
+      },
     });
 
-    res.json({ task });
+    if (!task) {
+      throw httpError(404, "Task not found");
+    }
+    if (task.contact.advisorId !== ADVISOR_ID) {
+      throw httpError(403, "Forbidden");
+    }
+
+    await prisma.nextStep.delete({ where: { id: taskId } });
+
+    res.status(204).send();
   } catch (error) {
     next(error);
   }
-},
-);
+});
 
 module.exports = router;

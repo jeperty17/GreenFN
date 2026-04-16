@@ -5,48 +5,57 @@
  * Mark Done removes the card on API success. Reschedule reveals an inline date input.
  */
 
-import { useState } from 'react';
-import { Button } from '../ui/button';
-import { Badge } from '../ui/badge';
-import { Card, CardContent } from '../ui/card';
-import type { Task, TaskBucket } from './types';
+import { useState } from "react";
+import { Trash2 } from "lucide-react";
+import { Button } from "../ui/button";
+import { Badge } from "../ui/badge";
+import { Card, CardContent } from "../ui/card";
+import type { Task, TaskBucket } from "./types";
 
 interface TaskCardProps {
   task: Task;
   urgency: TaskBucket;
   onMarkDone: (taskId: string) => Promise<void>;
   onReschedule: (taskId: string, newDueAt: string) => Promise<void>;
+  onDelete: (taskId: string) => Promise<void>;
 }
 
 function formatDate(isoString: string): string {
-  return new Date(isoString).toLocaleDateString('en-US', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
+  return new Date(isoString).toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
   });
 }
 
-function TaskCard({ task, urgency, onMarkDone, onReschedule }: TaskCardProps) {
+function TaskCard({
+  task,
+  urgency,
+  onMarkDone,
+  onReschedule,
+  onDelete,
+}: TaskCardProps) {
   const [isMarkingDone, setIsMarkingDone] = useState(false);
   const [showReschedule, setShowReschedule] = useState(false);
-  const [rescheduleDate, setRescheduleDate] = useState('');
+  const [rescheduleDate, setRescheduleDate] = useState("");
   const [isRescheduling, setIsRescheduling] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Card border/background colour by urgency
   const cardClass =
-    urgency === 'overdue'
-      ? 'border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30'
-      : urgency === 'dueToday'
-      ? 'border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30'
-      : '';
+    urgency === "overdue"
+      ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30"
+      : urgency === "dueToday"
+        ? "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30"
+        : "";
 
   // Due date text colour by urgency
   const dateClass =
-    urgency === 'overdue'
-      ? 'text-red-600 dark:text-red-400'
-      : urgency === 'dueToday'
-      ? 'text-amber-600 dark:text-amber-400'
-      : 'text-muted-foreground';
+    urgency === "overdue"
+      ? "text-red-600 dark:text-red-400"
+      : urgency === "dueToday"
+        ? "text-amber-600 dark:text-amber-400"
+        : "text-muted-foreground";
 
   async function handleMarkDone() {
     setIsMarkingDone(true);
@@ -63,9 +72,18 @@ function TaskCard({ task, urgency, onMarkDone, onReschedule }: TaskCardProps) {
     try {
       await onReschedule(task.id, rescheduleDate);
       setShowReschedule(false);
-      setRescheduleDate('');
+      setRescheduleDate("");
     } finally {
       setIsRescheduling(false);
+    }
+  }
+
+  async function handleDelete() {
+    setIsDeleting(true);
+    try {
+      await onDelete(task.id);
+    } finally {
+      setIsDeleting(false);
     }
   }
 
@@ -76,7 +94,9 @@ function TaskCard({ task, urgency, onMarkDone, onReschedule }: TaskCardProps) {
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 space-y-0.5">
             <p className="text-sm font-medium leading-snug">{task.title}</p>
-            <p className="text-xs text-muted-foreground truncate">{task.contactName}</p>
+            <p className="text-xs text-muted-foreground truncate">
+              {task.contactName}
+            </p>
           </div>
           <div className="flex flex-col items-end gap-1 shrink-0">
             <span className={`text-xs font-medium ${dateClass}`}>
@@ -104,14 +124,14 @@ function TaskCard({ task, urgency, onMarkDone, onReschedule }: TaskCardProps) {
               onClick={handleRescheduleSubmit}
               disabled={isRescheduling || !rescheduleDate}
             >
-              {isRescheduling ? 'Saving…' : 'Save'}
+              {isRescheduling ? "Saving…" : "Save"}
             </Button>
             <Button
               size="sm"
               variant="ghost"
               onClick={() => {
                 setShowReschedule(false);
-                setRescheduleDate('');
+                setRescheduleDate("");
               }}
               disabled={isRescheduling}
             >
@@ -122,17 +142,28 @@ function TaskCard({ task, urgency, onMarkDone, onReschedule }: TaskCardProps) {
           <div className="flex items-center gap-2">
             <Button
               size="sm"
+              variant="ghost"
+              onClick={handleDelete}
+              disabled={isMarkingDone || isDeleting}
+              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              title="Delete task"
+              aria-label="Delete task"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+            <Button
+              size="sm"
               variant="outline"
               onClick={handleMarkDone}
-              disabled={isMarkingDone}
+              disabled={isMarkingDone || isDeleting}
             >
-              {isMarkingDone ? 'Saving…' : 'Mark Done'}
+              {isMarkingDone ? "Saving…" : "Mark Done"}
             </Button>
             <Button
               size="sm"
               variant="ghost"
               onClick={() => setShowReschedule(true)}
-              disabled={isMarkingDone}
+              disabled={isMarkingDone || isDeleting}
             >
               Reschedule
             </Button>
