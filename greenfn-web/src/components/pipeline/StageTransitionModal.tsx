@@ -1,14 +1,14 @@
 /**
- * 2-step modal shown after a contact is dragged to a new pipeline stage.
- * Step 1: Log an interaction via POST /api/interactions (skippable).
- * Step 2: Set a next step via POST /api/tasks (skippable).
- * If Step 1's API call fails, the error is toasted and the modal still advances to Step 2.
- * Undo button available on both steps — reverts the card move with no API call.
+ * 4-step modal shown after a contact is dragged to a new pipeline stage.
+ * Step 0: Confirm stage transition intent.
+ * Step 1: Capture interaction details (or skip).
+ * Step 2: Capture next-step task details (or skip).
+ * Step 3: Review summary, then execute all selected API actions.
+ * No API calls are made inside this component; parent executes PATCH/POST calls
+ * only after all steps are completed.
  */
 
 import { useState } from "react";
-import { toast } from "sonner";
-import { API_BASE_URL } from "../../config/env";
 import { Button } from "../ui/button";
 import {
   Dialog,
@@ -25,14 +25,29 @@ import { Textarea } from "../ui/textarea";
 export interface PendingTransition {
   contactId: string;
   contactName: string;
+  fromStageName: string;
   toStageName: string;
-  destStageId: string; // used by the parent to make the PATCH call on confirm
+  destStageId: string;
+}
+
+export interface TransitionCompletionPayload {
+  contactId: string;
+  destStageId: string;
+  interaction: {
+    type: string;
+    notes?: string;
+  } | null;
+  nextSteps: Array<{
+    title: string;
+    dueAt: string;
+    description?: string;
+  }> | null;
 }
 
 interface StageTransitionModalProps {
   pendingTransition: PendingTransition | null;
-  // Called when user completes or skips both steps — triggers the PATCH in the parent.
-  onComplete: () => void;
+  // Called after all modal steps are completed — parent performs API calls.
+  onComplete: (payload: TransitionCompletionPayload) => Promise<void>;
   // Called when user clicks Undo — reverts the card move, no API call.
   onUndo: () => void;
 }
@@ -49,105 +64,186 @@ const INTERACTION_TYPES = [
   { value: "NOTE", label: "Note" },
 ];
 
-function StageTransitionModal({ pendingTransition, onComplete, onUndo }: StageTransitionModalProps) {
-  const [step, setStep] = useState<1 | 2>(1);
+interface NextStepDraft {
+  id: number;
+  title: string;
+  dueAt: string;
+  description: string;
+}
+
+function createEmptyTaskDraft(id: number): NextStepDraft {
+  return {
+    id,
+    title: "",
+    dueAt: "",
+    description: "",
+  };
+}
+
+function StageTransitionModal({
+  pendingTransition,
+  onComplete,
+  onUndo,
+}: StageTransitionModalProps) {
+  const [step, setStep] = useState<0 | 1 | 2 | 3>(0);
 
   // Step 1 fields
   const [interactionType, setInteractionType] = useState("CALL");
   const [interactionNotes, setInteractionNotes] = useState("");
-  const [isLoggingInteraction, setIsLoggingInteraction] = useState(false);
+  const [shouldCreateInteraction, setShouldCreateInteraction] = useState(true);
 
   // Step 2 fields
-  const [taskTitle, setTaskTitle] = useState("");
-  const [taskDueAt, setTaskDueAt] = useState("");
-  const [taskDescription, setTaskDescription] = useState("");
-  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [nextStepDrafts, setNextStepDrafts] = useState<NextStepDraft[]>([
+    createEmptyTaskDraft(1),
+  ]);
+  const [nextStepDraftSeed, setNextStepDraftSeed] = useState(2);
+  const [shouldCreateNextStep, setShouldCreateNextStep] = useState(true);
+  const [isFinalizing, setIsFinalizing] = useState(false);
 
-  // Reset local form state, then signal the parent to confirm the stage change.
-  function handleComplete() {
-    setStep(1);
+  function resetLocalState() {
+    setStep(0);
     setInteractionType("CALL");
     setInteractionNotes("");
-    setTaskTitle("");
-    setTaskDueAt("");
-    setTaskDescription("");
-    onComplete();
+    setShouldCreateInteraction(true);
+    setNextStepDrafts([createEmptyTaskDraft(1)]);
+    setNextStepDraftSeed(2);
+    setShouldCreateNextStep(true);
+  }
+
+  function updateTaskDraft(
+    id: number,
+    field: "title" | "dueAt" | "description",
+    value: string,
+  ) {
+    setNextStepDrafts((prev) =>
+      prev.map((draft) =>
+        draft.id === id ? { ...draft, [field]: value } : draft,
+      ),
+    );
+  }
+
+  function addTaskDraft() {
+    setNextStepDrafts((prev) => [
+      ...prev,
+      createEmptyTaskDraft(nextStepDraftSeed),
+    ]);
+    setNextStepDraftSeed((prev) => prev + 1);
+  }
+
+  function areTaskDraftsValid(drafts: NextStepDraft[]): boolean {
+    const todayStr = new Date().toLocaleDateString('en-CA');
+    return drafts.every(
+      (draft) =>
+        draft.title.trim().length > 0 &&
+        draft.dueAt.trim().length > 0 &&
+        draft.dueAt >= todayStr,
+    );
   }
 
   // Reset local form state, then signal the parent to revert the card.
   function handleUndo() {
-    setStep(1);
-    setInteractionType("CALL");
-    setInteractionNotes("");
-    setTaskTitle("");
-    setTaskDueAt("");
-    setTaskDescription("");
+    if (isFinalizing) return;
+    resetLocalState();
     onUndo();
   }
 
-  // Step 1 submit — calls POST /api/interactions, then advances to Step 2.
-  // On failure, shows a toast but still advances so the user isn't blocked.
-  async function handleLogInteraction() {
+  async function handleFinalize(options: {
+    useInteraction: boolean;
+    useNextStep: boolean;
+  }) {
     if (!pendingTransition) return;
-    setIsLoggingInteraction(true);
+    if (options.useNextStep && !areTaskDraftsValid(nextStepDrafts)) return;
+
+    const normalizedNextSteps = nextStepDrafts.map((draft) => ({
+      title: draft.title.trim(),
+      dueAt: draft.dueAt,
+      description: draft.description.trim() || undefined,
+    }));
+
+    const payload: TransitionCompletionPayload = {
+      contactId: pendingTransition.contactId,
+      destStageId: pendingTransition.destStageId,
+      interaction: options.useInteraction
+        ? {
+            type: interactionType,
+            notes: interactionNotes || undefined,
+          }
+        : null,
+      nextSteps: options.useNextStep ? normalizedNextSteps : null,
+    };
+
+    setIsFinalizing(true);
     try {
-      const res = await fetch(`${API_BASE_URL}/api/interactions`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contactId: pendingTransition.contactId,
-          type: interactionType,
-          notes: interactionNotes || undefined,
-          // occurredAt omitted — backend defaults to now()
-        }),
-      });
-      if (!res.ok) throw new Error(`Failed to log interaction (${res.status})`);
-      toast.success("Interaction logged.");
-    } catch {
-      toast.error("Could not log interaction — you can add it manually from the contact page.");
+      await onComplete(payload);
+      resetLocalState();
     } finally {
-      setIsLoggingInteraction(false);
-      setStep(2);
+      setIsFinalizing(false);
     }
   }
 
-  // Step 2 submit — creates a NextStep via POST /api/tasks, then confirms.
-  async function handleSetNextStep() {
-    if (!pendingTransition || !taskTitle || !taskDueAt) return;
-    setIsSubmitting(true);
-    try {
-      const res = await fetch(`${API_BASE_URL}/api/tasks`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          contactId: pendingTransition.contactId,
-          title: taskTitle,
-          description: taskDescription,
-          dueAt: taskDueAt,
-        }),
-      });
-      if (!res.ok) throw new Error(`Failed to create task (${res.status})`);
-      toast.success("Next step saved.");
-      handleComplete();
-    } catch {
-      toast.error("Failed to save next step. Please try again.");
-    } finally {
-      setIsSubmitting(false);
-    }
+  function confirmSkip(prompt: string): boolean {
+    return window.confirm(prompt);
+  }
+
+  function goToSummary(options: {
+    useInteraction: boolean;
+    useNextStep: boolean;
+  }) {
+    setShouldCreateInteraction(options.useInteraction);
+    setShouldCreateNextStep(options.useNextStep);
+    setStep(3);
   }
 
   // Closing the dialog via the X button or pressing Escape counts as Undo —
-  // the PATCH hasn't been made yet so there's nothing to commit.
+  // no API calls have been made yet so the optimistic UI can be reverted safely.
   return (
-    <Dialog open={!!pendingTransition} onOpenChange={(open) => !open && handleUndo()}>
-      <DialogContent className="sm:max-w-md">
-        {step === 1 ? (
+    <Dialog
+      open={!!pendingTransition}
+      onOpenChange={(open) => !open && handleUndo()}
+    >
+      <DialogContent className="flex max-h-[90vh] flex-col sm:max-w-2xl">
+        {step === 0 ? (
+          <>
+            <DialogHeader>
+              <DialogTitle>Confirm Stage Transition</DialogTitle>
+              <p className="text-sm text-muted-foreground">
+                You are moving{" "}
+                <span className="font-medium">
+                  {pendingTransition?.contactName}
+                </span>{" "}
+                from{" "}
+                <span className="font-medium">
+                  {pendingTransition?.fromStageName}
+                </span>{" "}
+                to{" "}
+                <span className="font-medium">
+                  {pendingTransition?.toStageName}
+                </span>
+                .
+              </p>
+            </DialogHeader>
+
+            <DialogFooter className="gap-2">
+              <Button
+                variant="outline"
+                onClick={handleUndo}
+                disabled={isFinalizing}
+                className="mr-auto"
+              >
+                Undo move
+              </Button>
+              <Button onClick={() => setStep(1)} disabled={isFinalizing}>
+                Continue
+              </Button>
+            </DialogFooter>
+          </>
+        ) : step === 1 ? (
           <>
             <DialogHeader>
               <DialogTitle>Log Interaction</DialogTitle>
               <p className="text-sm text-muted-foreground">
-                {pendingTransition?.contactName} moved to{" "}
-                <span className="font-medium">{pendingTransition?.toStageName}</span>
+                Add interaction details for {pendingTransition?.contactName} or
+                skip this step.
               </p>
             </DialogHeader>
 
@@ -181,78 +277,235 @@ function StageTransitionModal({ pendingTransition, onComplete, onUndo }: StageTr
             </div>
 
             <DialogFooter className="gap-2">
-              {/* Undo is leftmost and clearly distinct — aborts the whole drag */}
-              <Button variant="outline" onClick={handleUndo} disabled={isLoggingInteraction} className="mr-auto">
-                Undo move
+              <Button
+                variant="ghost"
+                onClick={() => setStep(0)}
+                disabled={isFinalizing}
+              >
+                Back
               </Button>
-              <Button variant="ghost" onClick={() => setStep(2)} disabled={isLoggingInteraction}>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  if (
+                    !confirmSkip(
+                      "Are you sure you don't want to log an interaction?",
+                    )
+                  ) {
+                    return;
+                  }
+                  setShouldCreateInteraction(false);
+                  setStep(2);
+                }}
+                disabled={isFinalizing}
+              >
                 Skip
               </Button>
-              <Button onClick={handleLogInteraction} disabled={isLoggingInteraction}>
-                {isLoggingInteraction ? "Logging..." : "Log & Continue"}
+              <Button
+                onClick={() => {
+                  setShouldCreateInteraction(true);
+                  setStep(2);
+                }}
+                disabled={isFinalizing}
+              >
+                Continue
+              </Button>
+            </DialogFooter>
+          </>
+        ) : step === 2 ? (
+          <>
+            <DialogHeader>
+              <div className="flex items-center justify-between gap-3">
+                <DialogTitle>Set Next Step</DialogTitle>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={addTaskDraft}
+                  disabled={isFinalizing}
+                >
+                  + Add Task
+                </Button>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                Add follow-up task details for{" "}
+                <span className="font-medium">
+                  {pendingTransition?.contactName}
+                </span>{" "}
+                or skip this step.
+              </p>
+            </DialogHeader>
+
+            {/* Scrollable task list — grows up to max-h-64 before the modal
+                height is capped; header and footer remain outside this area. */}
+            <div className="max-h-[28rem] overflow-y-auto py-2">
+              <div className="space-y-4 pr-1">
+                {nextStepDrafts.map((draft, index) => (
+                  <div
+                    key={draft.id}
+                    className="space-y-3 rounded-md border border-border p-3"
+                  >
+                    <p className="text-sm font-medium">Task {index + 1}</p>
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`task-title-${draft.id}`}>
+                        Title <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id={`task-title-${draft.id}`}
+                        placeholder="e.g. Send policy documents"
+                        value={draft.title}
+                        onChange={(e) =>
+                          updateTaskDraft(draft.id, "title", e.target.value)
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`task-due-at-${draft.id}`}>
+                        Due date <span className="text-destructive">*</span>
+                      </Label>
+                      <Input
+                        id={`task-due-at-${draft.id}`}
+                        type="date"
+                        min={new Date().toLocaleDateString("en-CA")}
+                        value={draft.dueAt}
+                        onChange={(e) =>
+                          updateTaskDraft(draft.id, "dueAt", e.target.value)
+                        }
+                      />
+                    </div>
+
+                    <div className="space-y-1.5">
+                      <Label htmlFor={`task-description-${draft.id}`}>
+                        Description (optional)
+                      </Label>
+                      <Textarea
+                        id={`task-description-${draft.id}`}
+                        placeholder="Any additional notes..."
+                        rows={2}
+                        value={draft.description}
+                        onChange={(e) =>
+                          updateTaskDraft(
+                            draft.id,
+                            "description",
+                            e.target.value,
+                          )
+                        }
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <DialogFooter className="mt-auto gap-2">
+              <Button
+                variant="ghost"
+                onClick={() => setStep(1)}
+                disabled={isFinalizing}
+              >
+                Back
+              </Button>
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  if (
+                    !confirmSkip(
+                      "Are you sure you don't want to create a next step?",
+                    )
+                  ) {
+                    return;
+                  }
+                  goToSummary({
+                    useInteraction: shouldCreateInteraction,
+                    useNextStep: false,
+                  });
+                }}
+                disabled={isFinalizing}
+              >
+                Skip
+              </Button>
+              <Button
+                onClick={() =>
+                  goToSummary({
+                    useInteraction: shouldCreateInteraction,
+                    useNextStep: true,
+                  })
+                }
+                disabled={isFinalizing || !areTaskDraftsValid(nextStepDrafts)}
+              >
+                {isFinalizing ? "Saving..." : "Continue"}
               </Button>
             </DialogFooter>
           </>
         ) : (
           <>
             <DialogHeader>
-              <DialogTitle>Set Next Step</DialogTitle>
+              <DialogTitle>Review Summary</DialogTitle>
               <p className="text-sm text-muted-foreground">
-                What needs to happen next for{" "}
-                <span className="font-medium">{pendingTransition?.contactName}</span>?
+                Confirm the actions below. API calls will execute only after you
+                continue.
               </p>
             </DialogHeader>
 
-            <div className="space-y-4 py-2">
-              <div className="space-y-1.5">
-                <Label htmlFor="task-title">
-                  Title <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="task-title"
-                  placeholder="e.g. Send policy documents"
-                  value={taskTitle}
-                  onChange={(e) => setTaskTitle(e.target.value)}
-                />
+            <div className="space-y-3 py-2 text-sm">
+              <div className="rounded-md border border-border bg-muted/40 p-3">
+                <p className="font-medium">Stage change</p>
+                <p className="text-muted-foreground">
+                  Move {pendingTransition?.contactName} from{" "}
+                  {pendingTransition?.fromStageName} to{" "}
+                  {pendingTransition?.toStageName}
+                </p>
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="task-due-at">
-                  Due date <span className="text-destructive">*</span>
-                </Label>
-                <Input
-                  id="task-due-at"
-                  type="date"
-                  value={taskDueAt}
-                  onChange={(e) => setTaskDueAt(e.target.value)}
-                />
+              <div className="rounded-md border border-border bg-muted/40 p-3">
+                <p className="font-medium">Interaction</p>
+                {shouldCreateInteraction ? (
+                  <p className="text-muted-foreground">
+                    Create interaction: {interactionType}
+                    {interactionNotes ? ` - ${interactionNotes}` : ""}
+                  </p>
+                ) : (
+                  <p className="text-muted-foreground">Skipped</p>
+                )}
               </div>
 
-              <div className="space-y-1.5">
-                <Label htmlFor="task-description">Description (optional)</Label>
-                <Textarea
-                  id="task-description"
-                  placeholder="Any additional notes..."
-                  rows={2}
-                  value={taskDescription}
-                  onChange={(e) => setTaskDescription(e.target.value)}
-                />
+              <div className="rounded-md border border-border bg-muted/40 p-3">
+                <p className="font-medium">Next step</p>
+                {shouldCreateNextStep ? (
+                  <div className="space-y-1 text-muted-foreground">
+                    {nextStepDrafts.map((draft, index) => (
+                      <p key={draft.id}>
+                        {index + 1}. {draft.title || "(untitled)"} (due{" "}
+                        {draft.dueAt || "-"})
+                        {draft.description ? ` - ${draft.description}` : ""}
+                      </p>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-muted-foreground">Skipped</p>
+                )}
               </div>
             </div>
 
             <DialogFooter className="gap-2">
-              {/* Undo is leftmost — aborts the whole drag even from Step 2 */}
-              <Button variant="outline" onClick={handleUndo} disabled={isSubmitting} className="mr-auto">
-                Undo move
-              </Button>
-              <Button variant="ghost" onClick={handleComplete} disabled={isSubmitting}>
-                Skip
+              <Button
+                variant="ghost"
+                onClick={() => setStep(2)}
+                disabled={isFinalizing}
+              >
+                Back
               </Button>
               <Button
-                onClick={handleSetNextStep}
-                disabled={!taskTitle || !taskDueAt || isSubmitting}
+                onClick={() =>
+                  handleFinalize({
+                    useInteraction: shouldCreateInteraction,
+                    useNextStep: shouldCreateNextStep,
+                  })
+                }
+                disabled={isFinalizing}
               >
-                {isSubmitting ? "Saving..." : "Save Next Step"}
+                {isFinalizing ? "Executing..." : "Execute"}
               </Button>
             </DialogFooter>
           </>

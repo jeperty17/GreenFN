@@ -1,12 +1,12 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet } from "react-router-dom";
 
 const navLinks = [
-  { to: '/', label: 'Contacts Hub' },
-  { to: '/pipeline', label: 'Leads Pipeline' },
-  { to: '/today', label: 'Today' },
-  { to: '/interaction-history', label: 'Interaction History' },
-  { to: '/ai-summary', label: 'AI Summary' },
-]
+  { to: "/", label: "Contacts Hub" },
+  { to: "/pipeline", label: "Leads Pipeline" },
+  { to: "/today", label: "Tasks" },
+  { to: "/interaction-history", label: "Interaction History" },
+  { to: "/ai-summary", label: "AI Summary" },
+];
 
 function AppLayout() {
   return (
@@ -21,11 +21,11 @@ function AppLayout() {
                   to={link.to}
                   className={({ isActive }) =>
                     [
-                      'inline-flex rounded-md border px-3 py-2 text-sm transition-colors',
+                      "inline-flex rounded-md border px-3 py-2 text-sm transition-colors",
                       isActive
-                        ? 'border-primary bg-primary text-primary-foreground'
-                        : 'border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground',
-                    ].join(' ')
+                        ? "border-primary bg-primary text-primary-foreground"
+                        : "border-border bg-background text-foreground hover:bg-accent hover:text-accent-foreground",
+                    ].join(" ")
                   }
                 >
                   {link.label}
@@ -39,7 +39,7 @@ function AppLayout() {
         <Outlet />
       </main>
     </div>
-  )
+  );
 }
 
-export default AppLayout
+export default AppLayout;

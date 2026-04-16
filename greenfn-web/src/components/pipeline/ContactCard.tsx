@@ -26,24 +26,23 @@ function daysSinceLabel(lastInteractionAt: string | null): string {
 }
 
 function ContactCard({ contact }: ContactCardProps) {
-  const { attributes, listeners, setNodeRef, transform, isDragging } = useDraggable({
+  const { attributes, listeners, setNodeRef, isDragging } = useDraggable({
     id: contact.id,
     // pass contact data so onDragEnd can access it without a lookup
     data: { stageId: contact.stageId, contact },
   });
 
-  const style = transform
-    ? { transform: `translate3d(${transform.x}px, ${transform.y}px, 0)` }
-    : undefined;
+  // Do NOT apply the transform to the original card — the DragOverlay renders the
+  // floating clone that follows the cursor. The original card stays in place as
+  // a ghost slot (opacity-reduced) so the column doesn't collapse during drag.
 
   return (
     <Card
       ref={setNodeRef}
-      style={style}
       {...listeners}
       {...attributes}
       className={`cursor-grab transition-shadow hover:shadow-md active:cursor-grabbing ${
-        isDragging ? "opacity-40" : ""
+        isDragging ? "opacity-30" : ""
       }`}
     >
       <CardContent className="space-y-2 p-3">
