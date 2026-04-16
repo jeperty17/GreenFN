@@ -49,10 +49,11 @@ const API_BASE_PATH = normalizeApiBasePath(
 const DATABASE_URL = readRequiredEnv("DATABASE_URL");
 const DIRECT_URL = readRequiredEnv("DIRECT_URL");
 
-const AI_PROVIDER = readOptionalEnv("AI_PROVIDER", "openai");
-const AI_PRIMARY_MODEL = readOptionalEnv("AI_PRIMARY_MODEL", "gpt-4.1-mini");
-const AI_FALLBACK_MODEL = readOptionalEnv("AI_FALLBACK_MODEL", "gpt-4.1-nano");
+const AI_PROVIDER = readOptionalEnv("AI_PROVIDER", "google");
+const AI_PRIMARY_MODEL = readOptionalEnv("AI_PRIMARY_MODEL", "gemini-2.5-flash");
+const AI_FALLBACK_MODEL = readOptionalEnv("AI_FALLBACK_MODEL", "gemini-2.5-flash-lite");
 const OPENAI_API_KEY = readOptionalEnv("OPENAI_API_KEY");
+const GEMINI_API_KEY = readOptionalEnv("GEMINI_API_KEY");
 const AI_TIMEOUT_MS = readOptionalInt("AI_TIMEOUT_MS", 12000);
 const AI_RATE_LIMIT_WINDOW_MS = readOptionalInt(
   "AI_RATE_LIMIT_WINDOW_MS",
@@ -79,6 +80,14 @@ function requireOpenAIApiKey() {
   return OPENAI_API_KEY;
 }
 
+function requireGeminiApiKey() {
+  if (!GEMINI_API_KEY) {
+    throw new Error("Missing required environment variable: GEMINI_API_KEY");
+  }
+
+  return GEMINI_API_KEY;
+}
+
 module.exports = {
   PORT,
   NODE_ENV,
@@ -89,9 +98,11 @@ module.exports = {
   AI_PRIMARY_MODEL,
   AI_FALLBACK_MODEL,
   OPENAI_API_KEY,
+  GEMINI_API_KEY,
   AI_TIMEOUT_MS,
   AI_RATE_LIMIT_WINDOW_MS,
   AI_RATE_LIMIT_MAX_REQUESTS,
   CORS_ALLOWED_ORIGINS,
   requireOpenAIApiKey,
+  requireGeminiApiKey,
 };

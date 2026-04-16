@@ -3,15 +3,18 @@ const {
   AI_PROVIDER,
   AI_PRIMARY_MODEL,
   AI_FALLBACK_MODEL,
-  requireOpenAIApiKey,
+  requireGeminiApiKey,
 } = require("../../config/env");
 const { logAIEvent } = require("./logging");
 
-const OPENAI_ENDPOINT = "https://api.openai.com/v1/chat/completions";
+// Gemini native generateContent endpoint — model name goes in the path
+const GEMINI_BASE_URL =
+  "https://generativelanguage.googleapis.com/v1beta/models";
 
+// Gemini 2.5 Flash and Flash-Lite are effectively free tier — cost set to 0
 const MODEL_PRICING_PER_1K = {
-  "gpt-4.1-mini": { input: 0.0004, output: 0.0016 },
-  "gpt-4.1-nano": { input: 0.0001, output: 0.0004 },
+  "gemini-2.5-flash": { input: 0, output: 0 },
+  "gemini-2.5-flash-lite": { input: 0, output: 0 },
 };
 
 const defaultOptions = {
@@ -22,8 +25,8 @@ const defaultOptions = {
   retryBackoffMs: 350,
   maxInputChars: 12000,
   maxInputTokens: 3200,
-  maxOutputTokens: 700,
-  maxSummaryOutputChars: 2600,
+  maxOutputTokens: 1200,
+  maxSummaryOutputChars: 4000,
   maxDraftOutputChars: 1400,
   timeoutMs: 12000,
 };
@@ -123,15 +126,16 @@ function buildSummaryOutputContract() {
   return [
     "Output contract:",
     "- Use exactly these sections in order:",
-    "  1) Context",
-    "  2) Key Facts",
-    "  3) Client Needs",
-    "  4) Decisions",
-    "  5) Next Steps",
-    "- Each section should have 1-3 concise bullet points.",
-    "- Keep total output under 180 words unless input clearly requires more.",
+    "  1) Context — who the client is, what pipeline stage they are at, and the nature of this interaction.",
+    "  2) Key Facts — anything the FA would need to remember for future reference or for the next pipeline stage.",
+    "  3) Client Needs — specific concerns, goals, or pain points the client raised.",
+    "  4) Decisions — anything agreed upon or committed to by either party during this interaction.",
+    "  5) Next Steps — what needs to happen next, including timing or deadlines where mentioned.",
+    "- Each section must have 2-5 bullet points.",
+    "- Each bullet point must be a complete, informative sentence — not a fragment.",
+    "- Keep total output under 400 words.",
     "- Do not include Markdown tables, code fences, or JSON.",
-    '- If information is missing, write "Not specified" instead of guessing.',
+    '- If a section genuinely has no relevant information, write a single bullet: "Not specified." Do not pad with filler.',
   ].join("\n");
 }
 
@@ -177,12 +181,32 @@ function buildDraftMessages({ contactName, objective, context }) {
   ];
 }
 
-function normalizeTextOutput(responseJson) {
-  const choice = responseJson?.choices?.[0];
-  return choice?.message?.content || "";
+
+// Convert OpenAI-style messages to Gemini native format.
+// System messages become system_instruction; user/assistant become contents.
+function toGeminiRequest({ messages, maxOutputTokens }) {
+  const systemMsg = messages.find((m) => m.role === "system");
+  const turns = messages.filter((m) => m.role !== "system");
+
+  const body = {
+    contents: turns.map((m) => ({
+      role: m.role === "assistant" ? "model" : "user",
+      parts: [{ text: m.content }],
+    })),
+    generationConfig: {
+      temperature: 0.4,
+      maxOutputTokens,
+    },
+  };
+
+  if (systemMsg) {
+    body.system_instruction = { parts: [{ text: systemMsg.content }] };
+  }
+
+  return body;
 }
 
-async function callOpenAI({
+async function callGemini({
   apiKey,
   model,
   messages,
@@ -192,20 +216,15 @@ async function callOpenAI({
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
 
+  // Native Gemini generateContent endpoint — API key goes in the query string
+  const url = `${GEMINI_BASE_URL}/${encodeURIComponent(model)}:generateContent?key=${encodeURIComponent(apiKey)}`;
+
   try {
-    const response = await fetch(OPENAI_ENDPOINT, {
+    const response = await fetch(url, {
       method: "POST",
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        "Content-Type": "application/json",
-      },
+      headers: { "Content-Type": "application/json" },
       signal: controller.signal,
-      body: JSON.stringify({
-        model,
-        messages,
-        temperature: 0.4,
-        max_tokens: maxOutputTokens,
-      }),
+      body: JSON.stringify(toGeminiRequest({ messages, maxOutputTokens })),
     });
 
     if (!response.ok) {
@@ -217,7 +236,7 @@ async function callOpenAI({
       }
 
       const error = httpError(response.status, "AI provider request failed", {
-        provider: "openai",
+        provider: "google",
         model,
         statusCode: response.status,
         details,
@@ -227,7 +246,8 @@ async function callOpenAI({
     }
 
     const payload = await response.json();
-    return normalizeTextOutput(payload);
+    // Extract text from Gemini native response format
+    return payload?.candidates?.[0]?.content?.parts?.[0]?.text || "";
   } finally {
     clearTimeout(timeout);
   }
@@ -315,7 +335,7 @@ function validateOutputLength(text, maxChars, outputType) {
 function createAIService(config = {}) {
   const options = { ...defaultOptions, ...config };
 
-  if (options.provider !== "openai") {
+  if (options.provider !== "google" && options.provider !== "gemini") {
     throw httpError(400, "Unsupported AI provider configured", {
       provider: options.provider,
     });
@@ -331,7 +351,7 @@ function createAIService(config = {}) {
       messages.map((message) => message.content).join("\n"),
       options.maxInputTokens,
     );
-    const apiKey = requireOpenAIApiKey();
+    const apiKey = requireGeminiApiKey();
 
     logAIEvent("info", "summary_request_started", {
       provider: options.provider,
@@ -345,7 +365,7 @@ function createAIService(config = {}) {
     const runForModel = async (model) => {
       const text = await withRetry(
         () =>
-          callOpenAI({
+          callGemini({
             apiKey,
             model,
             messages,
@@ -406,6 +426,7 @@ function createAIService(config = {}) {
           inputText: input,
           statusCode: primaryError?.statusCode || null,
           errorMessage: primaryError?.message || "AI summary request failed",
+          errorDetails: primaryError?.details || null,
           durationMs: Date.now() - startedAt,
         });
         throw primaryError;
@@ -420,6 +441,7 @@ function createAIService(config = {}) {
         inputText: input,
         statusCode: primaryError?.statusCode || null,
         errorMessage: primaryError?.message || "Primary model failed",
+        errorDetails: primaryError?.details || null,
       });
 
       try {
@@ -447,6 +469,7 @@ function createAIService(config = {}) {
           inputText: input,
           statusCode: fallbackError?.statusCode || null,
           errorMessage: fallbackError?.message || "AI summary request failed",
+          errorDetails: fallbackError?.details || null,
           durationMs: Date.now() - startedAt,
         });
         throw fallbackError;
@@ -473,13 +496,13 @@ function createAIService(config = {}) {
       messages.map((message) => message.content).join("\n"),
       options.maxInputTokens,
     );
-    const apiKey = requireOpenAIApiKey();
+    const apiKey = requireGeminiApiKey();
 
     let text;
     try {
       text = await withRetry(
         () =>
-          callOpenAI({
+          callGemini({
             apiKey,
             model: options.primaryModel,
             messages,
@@ -501,6 +524,7 @@ function createAIService(config = {}) {
         inputText: context,
         statusCode: error?.statusCode || null,
         errorMessage: error?.message || "AI draft request failed",
+        errorDetails: error?.details || null,
         durationMs: Date.now() - startedAt,
       });
       throw error;

@@ -301,7 +301,7 @@ function normalizeInputMode(sourceMode) {
 function buildModelMetadata(summaryResult) {
   return {
     model: summaryResult.model || null,
-    provider: summaryResult.provider || "openai",
+    provider: summaryResult.provider || "google",
     usage: summaryResult.usage || null,
     degraded: Boolean(summaryResult.degraded),
     fallbackReason: summaryResult.fallbackReason || null,
@@ -368,24 +368,11 @@ function buildLocalFallbackSummary({ input, sourceMode }) {
 
 function isAiProviderUnavailable(error) {
   const statusCode = Number(error?.statusCode || 0);
-  const message = String(error?.message || "").toLowerCase();
-  const details = String(error?.details?.error?.message || "").toLowerCase();
-
   if (statusCode === 408 || statusCode === 429 || statusCode >= 500) {
     return true;
   }
 
   if (error?.name === "AbortError") {
-    return true;
-  }
-
-  if (
-    message.includes("openai_api_key") ||
-    message.includes("api key") ||
-    details.includes("temporar") ||
-    details.includes("unavailable") ||
-    details.includes("overloaded")
-  ) {
     return true;
   }
 
@@ -483,7 +470,7 @@ router.post(
         };
 
         logAIEvent("warn", "summary_provider_unavailable_local_fallback", {
-          provider: "openai",
+          provider: "google",
           model: null,
           path: "generateSummary",
           contactId,
