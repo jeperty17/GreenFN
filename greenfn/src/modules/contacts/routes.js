@@ -16,6 +16,7 @@ const SOURCE_CATEGORIES = new Set([
   "OTHER",
 ]);
 const CONTACT_META_MARKER = "greenfn-contact-meta-v1";
+const DEFAULT_ADVISOR_ID = "seed-user-001";
 
 router.use((req, res, next) => {
   const start = process.hrtime.bigint();
@@ -263,8 +264,16 @@ function validateType(type, errors, fieldName = "type") {
   }
 }
 
-function validateSourceCategory(sourceCategory, errors, fieldName = "sourceCategory") {
-  if (sourceCategory === undefined || sourceCategory === null || sourceCategory === "") {
+function validateSourceCategory(
+  sourceCategory,
+  errors,
+  fieldName = "sourceCategory",
+) {
+  if (
+    sourceCategory === undefined ||
+    sourceCategory === null ||
+    sourceCategory === ""
+  ) {
     return;
   }
 
@@ -291,20 +300,43 @@ function validateOptionalStringField(body, fieldName, errors) {
   }
 }
 
-async function resolveAdvisorId() {
+async function resolveAdvisorIdFromRequest(req) {
+  if (req.authUser?.id) {
+    return req.authUser.id;
+  }
+
   const advisor = await prisma.user.findFirst({
     select: { id: true },
     orderBy: { createdAt: "asc" },
   });
 
-  if (!advisor) {
-    throw httpError(
-      500,
-      "Unable to resolve advisor context for contact creation",
-    );
+  return advisor?.id || DEFAULT_ADVISOR_ID;
+}
+
+async function resolveDefaultLeadStageId(advisorId) {
+  const newStage = await prisma.pipelineStage.findFirst({
+    where: {
+      advisorId,
+      name: {
+        equals: "New",
+        mode: "insensitive",
+      },
+    },
+    orderBy: { order: "asc" },
+    select: { id: true },
+  });
+
+  if (newStage) {
+    return newStage.id;
   }
 
-  return advisor.id;
+  const firstStage = await prisma.pipelineStage.findFirst({
+    where: { advisorId },
+    orderBy: { order: "asc" },
+    select: { id: true },
+  });
+
+  return firstStage?.id || null;
 }
 
 function validateCreateContact(body) {
@@ -430,9 +462,70 @@ async function resolveTagIdsByNames(advisorId, tagNames) {
   return resolvedTagIds;
 }
 
-async function resolveContactForWrite(contactId) {
-  const contact = await prisma.contact.findUnique({
-    where: { id: contactId },
+async function loadContactTagsByContactIds(contactIds) {
+  if (!Array.isArray(contactIds) || contactIds.length === 0) {
+    return new Map();
+  }
+
+  const contactTags = await prisma.contactTag.findMany({
+    where: {
+      contactId: { in: contactIds },
+    },
+    select: {
+      contactId: true,
+      tagId: true,
+    },
+  });
+
+  const tagIds = [
+    ...new Set(contactTags.map((contactTag) => contactTag.tagId)),
+  ];
+  const tags =
+    tagIds.length > 0
+      ? await prisma.tag.findMany({
+          where: { id: { in: tagIds } },
+          select: { id: true, name: true },
+        })
+      : [];
+  const tagMap = new Map(tags.map((tag) => [tag.id, tag]));
+  const byContactId = new Map();
+
+  for (const contactTag of contactTags) {
+    const tag = tagMap.get(contactTag.tagId);
+    if (!tag) {
+      continue;
+    }
+
+    const list = byContactId.get(contactTag.contactId) || [];
+    list.push({ tag });
+    byContactId.set(contactTag.contactId, list);
+  }
+
+  return byContactId;
+}
+
+async function withTagsForContacts(contacts) {
+  const tagMapByContact = await loadContactTagsByContactIds(
+    contacts.map((contact) => contact.id),
+  );
+
+  return contacts.map((contact) => ({
+    ...contact,
+    tags: tagMapByContact.get(contact.id) || [],
+  }));
+}
+
+async function withTagsForContact(contact) {
+  const [enriched] = await withTagsForContacts(contact ? [contact] : []);
+  return enriched || null;
+}
+
+async function resolveContactForWrite(contactId, advisorId) {
+  const contact = await prisma.contact.findFirst({
+    where: {
+      id: contactId,
+      advisorId,
+    },
     select: { id: true, advisorId: true, notes: true },
   });
 
@@ -448,6 +541,7 @@ async function resolveContactForWrite(contactId) {
 
 router.get("/", async (req, res, next) => {
   try {
+    const advisorId = await resolveAdvisorIdFromRequest(req);
     const search = String(req.query.search || "").trim();
     const source = String(req.query.source || "").trim();
     const sourceCategory = normalizeSourceCategory(req.query.sourceCategory);
@@ -461,7 +555,7 @@ router.get("/", async (req, res, next) => {
     const pageSize = Math.min(parsePositiveInt(req.query.pageSize, 20), 100);
     const skip = (page - 1) * pageSize;
 
-    const andFilters = [];
+    const andFilters = [{ advisorId }];
 
     if (search) {
       andFilters.push({
@@ -509,23 +603,16 @@ router.get("/", async (req, res, next) => {
         orderBy: [{ updatedAt: "desc" }, { fullName: "asc" }],
         skip,
         take: pageSize,
-        include: {
-          tags: {
-            include: {
-              tag: {
-                select: { id: true, name: true },
-              },
-            },
-          },
-        },
       }),
       prisma.contact.count({ where }),
     ]);
 
+    const contactsWithTags = await withTagsForContacts(contacts);
+
     const totalPages = Math.max(1, Math.ceil(total / pageSize));
 
     res.json({
-      items: contacts.map((contact) => ({
+      items: contactsWithTags.map((contact) => ({
         ...mapContact(contact),
       })),
       pagination: {
@@ -552,7 +639,7 @@ router.get("/", async (req, res, next) => {
 
 router.get("/tags", async (_req, res, next) => {
   try {
-    const advisorId = await resolveAdvisorId();
+    const advisorId = await resolveAdvisorIdFromRequest(_req);
     const tags = await prisma.tag.findMany({
       where: { advisorId },
       orderBy: [{ name: "asc" }],
@@ -576,7 +663,7 @@ router.post("/tags", async (req, res, next) => {
       ]);
     }
 
-    const advisorId = await resolveAdvisorId();
+    const advisorId = await resolveAdvisorIdFromRequest(req);
     const name = req.body.name.trim();
 
     const tag = await prisma.tag.upsert({
@@ -602,16 +689,11 @@ router.post("/tags", async (req, res, next) => {
 
 router.get("/:contactId", async (req, res, next) => {
   try {
-    const contact = await prisma.contact.findUnique({
-      where: { id: req.params.contactId },
-      include: {
-        tags: {
-          include: {
-            tag: {
-              select: { id: true, name: true },
-            },
-          },
-        },
+    const advisorId = await resolveAdvisorIdFromRequest(req);
+    const contact = await prisma.contact.findFirst({
+      where: {
+        id: req.params.contactId,
+        advisorId,
       },
     });
 
@@ -621,8 +703,9 @@ router.get("/:contactId", async (req, res, next) => {
         contactId: req.params.contactId,
       });
     }
+    const contactWithTags = await withTagsForContact(contact);
 
-    res.json({ item: mapContact(contact) });
+    res.json({ item: mapContact(contactWithTags) });
   } catch (error) {
     next(error);
   }
@@ -633,17 +716,25 @@ router.post(
   validateBody(validateCreateContact),
   async (req, res, next) => {
     try {
-      const advisorId = await resolveAdvisorId();
+      const advisorId = await resolveAdvisorIdFromRequest(req);
       const type = String(req.body.type || "LEAD")
         .trim()
         .toUpperCase();
+      const normalizedType = CONTACT_TYPES.has(type) ? type : "LEAD";
+      const defaultLeadStageId =
+        normalizedType === "LEAD"
+          ? await resolveDefaultLeadStageId(advisorId)
+          : null;
       const fullName = req.body.fullName.trim();
       const birthday = parseBirthday(req.body.birthday, "birthday", []);
       const source = normalizeOptionalString(req.body.source);
       const sourceCategory =
         normalizeSourceCategory(req.body.sourceCategory) ||
         inferSourceCategoryFromSource(source);
-      const policyMetadata = normalizePolicyMetadata(req.body.policyMetadata, []);
+      const policyMetadata = normalizePolicyMetadata(
+        req.body.policyMetadata,
+        [],
+      );
 
       if (!fullName) {
         throw httpError(400, "Validation failed", [
@@ -655,7 +746,8 @@ router.post(
         data: {
           advisorId,
           fullName,
-          type: CONTACT_TYPES.has(type) ? type : "LEAD",
+          type: normalizedType,
+          stageId: defaultLeadStageId,
           email: normalizeOptionalString(req.body.email),
           phone: normalizeOptionalString(req.body.phone),
           source,
@@ -680,18 +772,11 @@ router.post(
             })),
           },
         },
-        include: {
-          tags: {
-            include: {
-              tag: {
-                select: { id: true, name: true },
-              },
-            },
-          },
-        },
       });
 
-      res.status(201).json({ item: mapContact(contact) });
+      const contactWithTags = await withTagsForContact(contact);
+
+      res.status(201).json({ item: mapContact(contactWithTags) });
     } catch (error) {
       next(error);
     }
@@ -703,10 +788,11 @@ router.patch(
   validateBody(validateUpdateContact),
   async (req, res, next) => {
     try {
-      const existingContact = await prisma.contact.findUnique({
-        where: { id: req.params.contactId },
-        select: { id: true, advisorId: true, notes: true },
-      });
+      const advisorId = await resolveAdvisorIdFromRequest(req);
+      const existingContact = await resolveContactForWrite(
+        req.params.contactId,
+        advisorId,
+      );
 
       if (!existingContact) {
         throw httpError(404, "Requested record was not found", {
@@ -751,7 +837,9 @@ router.patch(
       }
 
       if (req.body.sourceCategory !== undefined) {
-        updatedPayload.sourceCategory = normalizeSourceCategory(req.body.sourceCategory);
+        updatedPayload.sourceCategory = normalizeSourceCategory(
+          req.body.sourceCategory,
+        );
       }
 
       if (req.body.birthday !== undefined) {
@@ -771,11 +859,15 @@ router.patch(
         req.body.portfolioSummary !== undefined
       ) {
         if (req.body.priorities !== undefined) {
-          updatedPayload.lifePriorities = normalizeOptionalString(req.body.priorities);
+          updatedPayload.lifePriorities = normalizeOptionalString(
+            req.body.priorities,
+          );
         }
 
         if (req.body.portfolioSummary !== undefined) {
-          updatedPayload.portfolioSummary = normalizeOptionalString(req.body.portfolioSummary);
+          updatedPayload.portfolioSummary = normalizeOptionalString(
+            req.body.portfolioSummary,
+          );
         }
 
         updatedPayload.notes = buildNotesFromMeta(
@@ -788,7 +880,10 @@ router.patch(
       }
 
       if (req.body.policyMetadata !== undefined) {
-        updatedPayload.policyMetadata = normalizePolicyMetadata(req.body.policyMetadata, []);
+        updatedPayload.policyMetadata = normalizePolicyMetadata(
+          req.body.policyMetadata,
+          [],
+        );
       }
 
       if (req.body.tagNames !== undefined) {
@@ -808,18 +903,11 @@ router.patch(
       const contact = await prisma.contact.update({
         where: { id: req.params.contactId },
         data: updatedPayload,
-        include: {
-          tags: {
-            include: {
-              tag: {
-                select: { id: true, name: true },
-              },
-            },
-          },
-        },
       });
 
-      res.json({ item: mapContact(contact) });
+      const contactWithTags = await withTagsForContact(contact);
+
+      res.json({ item: mapContact(contactWithTags) });
     } catch (error) {
       next(error);
     }
@@ -828,7 +916,11 @@ router.patch(
 
 router.post("/:contactId/tags", async (req, res, next) => {
   try {
-    const contact = await resolveContactForWrite(req.params.contactId);
+    const advisorId = await resolveAdvisorIdFromRequest(req);
+    const contact = await resolveContactForWrite(
+      req.params.contactId,
+      advisorId,
+    );
     const incomingTagIds = Array.isArray(req.body?.tagIds)
       ? req.body.tagIds.filter(
           (tagId) => typeof tagId === "string" && tagId.trim().length > 0,
@@ -859,18 +951,10 @@ router.post("/:contactId/tags", async (req, res, next) => {
 
     const updatedContact = await prisma.contact.findUnique({
       where: { id: contact.id },
-      include: {
-        tags: {
-          include: {
-            tag: {
-              select: { id: true, name: true },
-            },
-          },
-        },
-      },
     });
+    const updatedContactWithTags = await withTagsForContact(updatedContact);
 
-    res.json({ item: mapContact(updatedContact) });
+    res.json({ item: mapContact(updatedContactWithTags) });
   } catch (error) {
     next(error);
   }
@@ -878,7 +962,11 @@ router.post("/:contactId/tags", async (req, res, next) => {
 
 router.delete("/:contactId/tags/:tagId", async (req, res, next) => {
   try {
-    const contact = await resolveContactForWrite(req.params.contactId);
+    const advisorId = await resolveAdvisorIdFromRequest(req);
+    const contact = await resolveContactForWrite(
+      req.params.contactId,
+      advisorId,
+    );
 
     await prisma.contactTag.deleteMany({
       where: {
@@ -889,18 +977,10 @@ router.delete("/:contactId/tags/:tagId", async (req, res, next) => {
 
     const updatedContact = await prisma.contact.findUnique({
       where: { id: contact.id },
-      include: {
-        tags: {
-          include: {
-            tag: {
-              select: { id: true, name: true },
-            },
-          },
-        },
-      },
     });
+    const updatedContactWithTags = await withTagsForContact(updatedContact);
 
-    res.json({ item: mapContact(updatedContact) });
+    res.json({ item: mapContact(updatedContactWithTags) });
   } catch (error) {
     next(error);
   }
@@ -908,29 +988,23 @@ router.delete("/:contactId/tags/:tagId", async (req, res, next) => {
 
 router.patch("/:contactId/starred", async (req, res, next) => {
   try {
+    const advisorId = await resolveAdvisorIdFromRequest(req);
     if (typeof req.body?.isStarred !== "boolean") {
       throw httpError(400, "Validation failed", [
         { field: "isStarred", message: "isStarred must be a boolean" },
       ]);
     }
 
-    await resolveContactForWrite(req.params.contactId);
+    await resolveContactForWrite(req.params.contactId, advisorId);
 
     const contact = await prisma.contact.update({
       where: { id: req.params.contactId },
       data: { isStarred: req.body.isStarred },
-      include: {
-        tags: {
-          include: {
-            tag: {
-              select: { id: true, name: true },
-            },
-          },
-        },
-      },
     });
 
-    res.json({ item: mapContact(contact) });
+    const contactWithTags = await withTagsForContact(contact);
+
+    res.json({ item: mapContact(contactWithTags) });
   } catch (error) {
     next(error);
   }
@@ -938,7 +1012,8 @@ router.patch("/:contactId/starred", async (req, res, next) => {
 
 router.delete("/:contactId", async (req, res, next) => {
   try {
-    await resolveContactForWrite(req.params.contactId);
+    const advisorId = await resolveAdvisorIdFromRequest(req);
+    await resolveContactForWrite(req.params.contactId, advisorId);
 
     await prisma.contact.delete({
       where: { id: req.params.contactId },

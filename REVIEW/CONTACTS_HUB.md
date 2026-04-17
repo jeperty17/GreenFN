@@ -177,3 +177,88 @@ API_BASE_PATH="/v1" npm run dev
 - **Backend env template** (`greenfn/.env.example`): documented `API_BASE_PATH` default.
 - **Backend contacts routes** (`greenfn/src/modules/contacts/routes.js`): added source-category and policy metadata support plus metrics middleware wiring.
 - **Backend contacts telemetry helper** (`greenfn/src/modules/contacts/logging.js`): new structured logging utility for contacts endpoints.
+
+---
+
+## Frontend Interaction Refinement (Contacts + Tags)
+
+### Summary
+
+Updated the Contacts Hub frontend interaction model for cleaner editing and tagging flows:
+
+- Create/Edit contact form is now in a collapsible dropdown section toggled by a Show/Hide button.
+- Tag Management is now in a collapsible dropdown section toggled by a Show/Hide button.
+- In the Contacts table, the previous inline add controls under `Tags` were replaced with a single `Add Tag` action.
+- Clicking `Add Tag` opens a dropdown menu of available tags not yet assigned to that contact; selecting a tag applies it immediately.
+
+### Reproducible Validation
+
+```bash
+cd greenfn-web
+npm run build
+```
+
+Run app locally:
+
+```bash
+cd greenfn-web
+npm run dev
+```
+
+### Observable Checks
+
+- `Create Contact` section is collapsed by default and opens/closes with Show/Hide.
+- `Tag Management` section is collapsed by default and opens/closes with Show/Hide.
+- Contacts rows show `Add Tag` under `Tags` instead of the previous inline Add controls.
+- Clicking `Add Tag` reveals available unassigned tags as a dropdown menu.
+- Selecting a tag from the dropdown assigns it to the contact and closes the menu.
+
+### Files Updated
+
+- `greenfn-web/src/pages/ContactsHubPage.tsx` — added collapsible create/tag panels and row-level `Add Tag` dropdown action behavior.
+
+---
+
+## Contact Detail Navigation (Per-Contact Page)
+
+### Summary
+
+Added a dedicated per-contact details page and linked it from the Contacts Hub table:
+
+- Contact names in the Contacts table are now clickable.
+- Clicking a contact name navigates to `/contacts/:contactId`.
+- The new page shows contact attributes, interactions, and open tasks related to that contact.
+- A `Back to Contacts Hub` button returns users to the main Contacts Hub page.
+
+### Reproducible Validation
+
+```bash
+cd greenfn-web
+npm run build
+```
+
+Run app locally:
+
+```bash
+cd greenfn-web
+npm run dev
+```
+
+### Observable Checks
+
+- In Contacts Hub, each contact name appears as a clickable link.
+- Hovering a contact name now shows a clear visual affordance (accent background, stronger underline, and color shift).
+- Clicking a name opens the dedicated contact details page.
+- Each row now includes a `Delete` action under `Actions` with a confirmation prompt.
+- Confirming delete removes the contact and refreshes the contacts list.
+- Contact details page displays:
+  - Core attributes (email, phone, source, birthday, type, starred state, priorities, portfolio summary, tags, updated time)
+  - Interactions list for that contact
+  - Open tasks tied to that contact
+- Clicking `Back to Contacts Hub` returns to the main contacts table.
+
+### Files Updated
+
+- `greenfn-web/src/pages/ContactsHubPage.tsx` — made contact name column entries clickable links.
+- `greenfn-web/src/pages/ContactDetailsPage.tsx` — new dedicated contact details page with related data sections and back button.
+- `greenfn-web/src/routes/AppRoutes.tsx` — added `/contacts/:contactId` route.

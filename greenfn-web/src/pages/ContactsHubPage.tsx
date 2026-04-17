@@ -1,4 +1,5 @@
 import { type FormEvent, useEffect, useMemo, useState } from "react";
+import { Link } from "react-router-dom";
 import { API_BASE_URL } from "../config/env";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
@@ -132,9 +133,11 @@ function ContactsHubPage() {
   const [newTagName, setNewTagName] = useState("");
   const [isCreatingTag, setIsCreatingTag] = useState(false);
   const [tagErrorMessage, setTagErrorMessage] = useState("");
-  const [rowTagSelection, setRowTagSelection] = useState<
-    Record<string, string>
-  >({});
+  const [isCreateContactOpen, setIsCreateContactOpen] = useState(false);
+  const [isTagManagementOpen, setIsTagManagementOpen] = useState(false);
+  const [openAddTagMenuForContactId, setOpenAddTagMenuForContactId] = useState<
+    string | null
+  >(null);
 
   const [pagination, setPagination] = useState<ContactsResponse["pagination"]>({
     page: 1,
@@ -386,13 +389,7 @@ function ContactsHubPage() {
     }
   }
 
-  async function handleAssignTag(contactId: string) {
-    const tagId = rowTagSelection[contactId];
-
-    if (!tagId) {
-      return;
-    }
-
+  async function handleAssignTag(contactId: string, tagId: string) {
     setTagErrorMessage("");
 
     try {
@@ -411,10 +408,7 @@ function ContactsHubPage() {
 
       const payload: { item: ContactItem } = await response.json();
       syncContactInList(payload.item);
-      setRowTagSelection((currentSelections) => ({
-        ...currentSelections,
-        [contactId]: "",
-      }));
+      setOpenAddTagMenuForContactId(null);
     } catch (error) {
       setTagErrorMessage((error as Error).message || "Failed to assign tag");
     }
@@ -466,6 +460,44 @@ function ContactsHubPage() {
     }
   }
 
+  async function handleDeleteContact(contact: ContactItem) {
+    const shouldDelete = window.confirm(
+      `Delete contact ${contact.fullName}? This action cannot be undone.`,
+    );
+
+    if (!shouldDelete) {
+      return;
+    }
+
+    setErrorMessage("");
+
+    try {
+      const response = await fetch(
+        `${API_BASE_URL}/api/contacts/${contact.id}`,
+        {
+          method: "DELETE",
+        },
+      );
+
+      if (!response.ok) {
+        throw new Error(await extractErrorMessage(response));
+      }
+
+      if (editingContactId === contact.id) {
+        handleStartCreate();
+      }
+
+      setContacts((currentContacts) =>
+        currentContacts.filter(
+          (currentContact) => currentContact.id !== contact.id,
+        ),
+      );
+      setRefreshKey((currentValue) => currentValue + 1);
+    } catch (error) {
+      setErrorMessage((error as Error).message || "Failed to delete contact");
+    }
+  }
+
   return (
     <section className="page-section space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -480,203 +512,245 @@ function ContactsHubPage() {
         </div>
       </div>
 
-      <form
-        onSubmit={handleSubmitContactForm}
-        className="space-y-4 rounded-md border bg-background p-4"
-      >
+      <div className="rounded-md border bg-background p-4">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <h3>{formMode === "create" ? "Create Contact" : "Edit Contact"}</h3>
-          {formMode === "edit" ? (
-            <Button type="button" variant="outline" onClick={handleStartCreate}>
-              Switch To Create
-            </Button>
-          ) : null}
-        </div>
-
-        <div className="form-grid">
-          <div className="field-stack">
-            <Label htmlFor="contact-full-name">Full Name</Label>
-            <Input
-              id="contact-full-name"
-              value={formState.fullName}
-              onChange={(event) =>
-                updateFormState("fullName", event.target.value)
-              }
-              placeholder="Enter full name"
-              required
-            />
-          </div>
-
-          <div className="field-stack">
-            <Label htmlFor="contact-type">Type</Label>
-            <select
-              id="contact-type"
-              value={formState.type}
-              onChange={(event) =>
-                updateFormState("type", event.target.value as ContactType)
-              }
-              className="h-9 rounded-md border bg-background px-3 text-sm"
-            >
-              <option value="LEAD">Lead</option>
-              <option value="CLIENT">Client</option>
-            </select>
-          </div>
-
-          <div className="field-stack">
-            <Label htmlFor="contact-phone">Phone</Label>
-            <Input
-              id="contact-phone"
-              value={formState.phone}
-              onChange={(event) => updateFormState("phone", event.target.value)}
-              placeholder="+65..."
-            />
-          </div>
-
-          <div className="field-stack">
-            <Label htmlFor="contact-email">Email</Label>
-            <Input
-              id="contact-email"
-              type="email"
-              value={formState.email}
-              onChange={(event) => updateFormState("email", event.target.value)}
-              placeholder="name@example.com"
-            />
-          </div>
-
-          <div className="field-stack">
-            <Label htmlFor="contact-source">Acquisition Source</Label>
-            <Input
-              id="contact-source"
-              value={formState.source}
-              onChange={(event) =>
-                updateFormState("source", event.target.value)
-              }
-              placeholder="Referral, cold call, social"
-            />
-          </div>
-
-          <div className="field-stack">
-            <Label htmlFor="contact-birthday">Birthday</Label>
-            <Input
-              id="contact-birthday"
-              type="date"
-              value={formState.birthday}
-              onChange={(event) =>
-                updateFormState("birthday", event.target.value)
-              }
-            />
-          </div>
-        </div>
-
-        <div className="form-grid">
-          <div className="field-stack">
-            <Label htmlFor="contact-priorities">Life Priorities</Label>
-            <Textarea
-              id="contact-priorities"
-              value={formState.priorities}
-              onChange={(event) =>
-                updateFormState("priorities", event.target.value)
-              }
-              placeholder="Children education, retirement, legacy planning"
-            />
-          </div>
-
-          <div className="field-stack">
-            <Label htmlFor="contact-portfolio-summary">
-              Portfolio Summary (Optional)
-            </Label>
-            <Textarea
-              id="contact-portfolio-summary"
-              value={formState.portfolioSummary}
-              onChange={(event) =>
-                updateFormState("portfolioSummary", event.target.value)
-              }
-              placeholder="Short summary of policies and holdings"
-            />
-          </div>
-        </div>
-
-        <div className="field-stack">
-          <Label htmlFor="contact-tags">Tags (comma-separated)</Label>
-          <Input
-            id="contact-tags"
-            value={formState.tagNames}
-            onChange={(event) =>
-              updateFormState("tagNames", event.target.value)
-            }
-            placeholder="High Priority, Follow Up"
-          />
-        </div>
-
-        <label className="inline-flex items-center gap-2 text-sm">
-          <input
-            type="checkbox"
-            checked={formState.isStarred}
-            onChange={(event) =>
-              updateFormState("isStarred", event.target.checked)
-            }
-          />
-          Mark as starred/focus contact
-        </label>
-
-        {formErrorMessage ? (
-          <p className="field-error">{formErrorMessage}</p>
-        ) : null}
-        {formSuccessMessage ? (
-          <p className="field-hint text-foreground">{formSuccessMessage}</p>
-        ) : null}
-
-        <div className="flex flex-wrap gap-2">
-          <Button type="submit" disabled={isSubmittingForm}>
-            {isSubmittingForm
-              ? "Saving..."
-              : formMode === "create"
-                ? "Create Contact"
-                : "Update Contact"}
-          </Button>
           <Button
             type="button"
             variant="outline"
-            onClick={handleStartCreate}
-            disabled={isSubmittingForm}
+            onClick={() =>
+              setIsCreateContactOpen((currentValue) => !currentValue)
+            }
           >
-            Reset Form
+            {isCreateContactOpen ? "Hide" : "Show"}
           </Button>
         </div>
-      </form>
 
-      <div className="space-y-3 rounded-md border bg-background p-4">
-        <h3>Tag Management</h3>
-        <div className="flex flex-wrap gap-2">
-          <Input
-            value={newTagName}
-            onChange={(event) => setNewTagName(event.target.value)}
-            placeholder="Create a new tag"
-            className="max-w-xs"
-          />
+        {isCreateContactOpen ? (
+          <form onSubmit={handleSubmitContactForm} className="mt-4 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <p className="field-hint">
+                {formMode === "create"
+                  ? "Fill details and create a new contact."
+                  : "You are editing an existing contact."}
+              </p>
+              {formMode === "edit" ? (
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={handleStartCreate}
+                >
+                  Switch To Create
+                </Button>
+              ) : null}
+            </div>
+
+            <div className="form-grid">
+              <div className="field-stack">
+                <Label htmlFor="contact-full-name">Full Name</Label>
+                <Input
+                  id="contact-full-name"
+                  value={formState.fullName}
+                  onChange={(event) =>
+                    updateFormState("fullName", event.target.value)
+                  }
+                  placeholder="Enter full name"
+                  required
+                />
+              </div>
+
+              <div className="field-stack">
+                <Label htmlFor="contact-type">Type</Label>
+                <select
+                  id="contact-type"
+                  value={formState.type}
+                  onChange={(event) =>
+                    updateFormState("type", event.target.value as ContactType)
+                  }
+                  className="h-9 rounded-md border bg-background px-3 text-sm"
+                >
+                  <option value="LEAD">Lead</option>
+                  <option value="CLIENT">Client</option>
+                </select>
+              </div>
+
+              <div className="field-stack">
+                <Label htmlFor="contact-phone">Phone</Label>
+                <Input
+                  id="contact-phone"
+                  value={formState.phone}
+                  onChange={(event) =>
+                    updateFormState("phone", event.target.value)
+                  }
+                  placeholder="+65..."
+                />
+              </div>
+
+              <div className="field-stack">
+                <Label htmlFor="contact-email">Email</Label>
+                <Input
+                  id="contact-email"
+                  type="email"
+                  value={formState.email}
+                  onChange={(event) =>
+                    updateFormState("email", event.target.value)
+                  }
+                  placeholder="name@example.com"
+                />
+              </div>
+
+              <div className="field-stack">
+                <Label htmlFor="contact-source">Acquisition Source</Label>
+                <Input
+                  id="contact-source"
+                  value={formState.source}
+                  onChange={(event) =>
+                    updateFormState("source", event.target.value)
+                  }
+                  placeholder="Referral, cold call, social"
+                />
+              </div>
+
+              <div className="field-stack">
+                <Label htmlFor="contact-birthday">Birthday</Label>
+                <Input
+                  id="contact-birthday"
+                  type="date"
+                  value={formState.birthday}
+                  onChange={(event) =>
+                    updateFormState("birthday", event.target.value)
+                  }
+                />
+              </div>
+            </div>
+
+            <div className="form-grid">
+              <div className="field-stack">
+                <Label htmlFor="contact-priorities">Life Priorities</Label>
+                <Textarea
+                  id="contact-priorities"
+                  value={formState.priorities}
+                  onChange={(event) =>
+                    updateFormState("priorities", event.target.value)
+                  }
+                  placeholder="Children education, retirement, legacy planning"
+                />
+              </div>
+
+              <div className="field-stack">
+                <Label htmlFor="contact-portfolio-summary">
+                  Portfolio Summary (Optional)
+                </Label>
+                <Textarea
+                  id="contact-portfolio-summary"
+                  value={formState.portfolioSummary}
+                  onChange={(event) =>
+                    updateFormState("portfolioSummary", event.target.value)
+                  }
+                  placeholder="Short summary of policies and holdings"
+                />
+              </div>
+            </div>
+
+            <div className="field-stack">
+              <Label htmlFor="contact-tags">Tags (comma-separated)</Label>
+              <Input
+                id="contact-tags"
+                value={formState.tagNames}
+                onChange={(event) =>
+                  updateFormState("tagNames", event.target.value)
+                }
+                placeholder="High Priority, Follow Up"
+              />
+            </div>
+
+            <label className="inline-flex items-center gap-2 text-sm">
+              <input
+                type="checkbox"
+                checked={formState.isStarred}
+                onChange={(event) =>
+                  updateFormState("isStarred", event.target.checked)
+                }
+              />
+              Mark as starred/focus contact
+            </label>
+
+            {formErrorMessage ? (
+              <p className="field-error">{formErrorMessage}</p>
+            ) : null}
+            {formSuccessMessage ? (
+              <p className="field-hint text-foreground">{formSuccessMessage}</p>
+            ) : null}
+
+            <div className="flex flex-wrap gap-2">
+              <Button type="submit" disabled={isSubmittingForm}>
+                {isSubmittingForm
+                  ? "Saving..."
+                  : formMode === "create"
+                    ? "Create Contact"
+                    : "Update Contact"}
+              </Button>
+              <Button
+                type="button"
+                variant="outline"
+                onClick={handleStartCreate}
+                disabled={isSubmittingForm}
+              >
+                Reset Form
+              </Button>
+            </div>
+          </form>
+        ) : null}
+      </div>
+
+      <div className="rounded-md border bg-background p-4">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <h3>Tag Management</h3>
           <Button
             type="button"
-            onClick={handleCreateTag}
-            disabled={isCreatingTag}
+            variant="outline"
+            onClick={() =>
+              setIsTagManagementOpen((currentValue) => !currentValue)
+            }
           >
-            {isCreatingTag ? "Creating..." : "Create Tag"}
+            {isTagManagementOpen ? "Hide" : "Show"}
           </Button>
         </div>
-        <div className="flex flex-wrap gap-2">
-          {availableTags.length > 0 ? (
-            availableTags.map((tag) => (
-              <Badge key={tag.id} variant="secondary">
-                {tag.name}
-              </Badge>
-            ))
-          ) : (
-            <p className="field-hint">
-              No tags yet. Create one to start assigning.
-            </p>
-          )}
-        </div>
-        {tagErrorMessage ? (
-          <p className="field-error">{tagErrorMessage}</p>
+
+        {isTagManagementOpen ? (
+          <div className="mt-3 space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Input
+                value={newTagName}
+                onChange={(event) => setNewTagName(event.target.value)}
+                placeholder="Create a new tag"
+                className="max-w-xs"
+              />
+              <Button
+                type="button"
+                onClick={handleCreateTag}
+                disabled={isCreatingTag}
+              >
+                {isCreatingTag ? "Creating..." : "Create Tag"}
+              </Button>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              {availableTags.length > 0 ? (
+                availableTags.map((tag) => (
+                  <Badge key={tag.id} variant="secondary">
+                    {tag.name}
+                  </Badge>
+                ))
+              ) : (
+                <p className="field-hint">
+                  No tags yet. Create one to start assigning.
+                </p>
+              )}
+            </div>
+            {tagErrorMessage ? (
+              <p className="field-error">{tagErrorMessage}</p>
+            ) : null}
+          </div>
         ) : null}
       </div>
 
@@ -780,7 +854,12 @@ function ContactsHubPage() {
               ? contacts.map((contact) => (
                   <tr key={contact.id} className="border-t align-top">
                     <td className="px-3 py-3 font-medium">
-                      {contact.fullName}
+                      <Link
+                        to={`/contacts/${contact.id}`}
+                        className="-mx-1 inline-flex rounded px-1 text-foreground transition-colors underline-offset-4 hover:bg-accent hover:text-primary hover:underline hover:decoration-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
+                      >
+                        {contact.fullName}
+                      </Link>
                     </td>
                     <td className="px-3 py-3">
                       <span className="inline-flex rounded-full border px-2 py-1 text-xs">
@@ -814,39 +893,53 @@ function ContactsHubPage() {
                       ) : (
                         <p>-</p>
                       )}
-                      <div className="flex items-center gap-1">
-                        <select
-                          value={rowTagSelection[contact.id] || ""}
-                          onChange={(event) =>
-                            setRowTagSelection((currentSelections) => ({
-                              ...currentSelections,
-                              [contact.id]: event.target.value,
-                            }))
-                          }
-                          className="h-8 rounded-md border bg-background px-2 text-xs"
-                        >
-                          <option value="">Select tag</option>
-                          {availableTags
-                            .filter(
-                              (tag) =>
-                                !contact.tags.some(
-                                  (contactTag) => contactTag.id === tag.id,
-                                ),
-                            )
-                            .map((tag) => (
-                              <option key={tag.id} value={tag.id}>
-                                {tag.name}
-                              </option>
-                            ))}
-                        </select>
+                      <div className="relative inline-block">
                         <Button
                           type="button"
                           size="sm"
                           variant="outline"
-                          onClick={() => handleAssignTag(contact.id)}
+                          disabled={
+                            availableTags.filter(
+                              (tag) =>
+                                !contact.tags.some(
+                                  (contactTag) => contactTag.id === tag.id,
+                                ),
+                            ).length === 0
+                          }
+                          onClick={() =>
+                            setOpenAddTagMenuForContactId((currentContactId) =>
+                              currentContactId === contact.id
+                                ? null
+                                : contact.id,
+                            )
+                          }
                         >
-                          Add
+                          Add Tag
                         </Button>
+
+                        {openAddTagMenuForContactId === contact.id ? (
+                          <div className="absolute left-0 z-10 mt-1 min-w-40 rounded-md border bg-background p-1 shadow-md">
+                            {availableTags
+                              .filter(
+                                (tag) =>
+                                  !contact.tags.some(
+                                    (contactTag) => contactTag.id === tag.id,
+                                  ),
+                              )
+                              .map((tag) => (
+                                <button
+                                  key={tag.id}
+                                  type="button"
+                                  onClick={() =>
+                                    handleAssignTag(contact.id, tag.id)
+                                  }
+                                  className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-accent"
+                                >
+                                  {tag.name}
+                                </button>
+                              ))}
+                          </div>
+                        ) : null}
                       </div>
                     </td>
                     <td className="px-3 py-3">
@@ -860,14 +953,24 @@ function ContactsHubPage() {
                       </Button>
                     </td>
                     <td className="px-3 py-3">
-                      <Button
-                        type="button"
-                        variant="outline"
-                        size="sm"
-                        onClick={() => handleStartEdit(contact)}
-                      >
-                        Edit
-                      </Button>
+                      <div className="flex flex-wrap gap-2">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          onClick={() => handleStartEdit(contact)}
+                        >
+                          Edit
+                        </Button>
+                        <Button
+                          type="button"
+                          variant="destructive"
+                          size="sm"
+                          onClick={() => handleDeleteContact(contact)}
+                        >
+                          Delete
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))

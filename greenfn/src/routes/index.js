@@ -5,6 +5,7 @@ const pipelineRoutes = require('../modules/pipeline/routes')
 const taskRoutes = require('../modules/tasks/routes')
 const interactionRoutes = require('../modules/interactions/routes')
 const aiRoutes = require('../modules/ai/routes')
+const { requireAuth } = require('../middleware/requireAuth')
 
 const router = express.Router()
 
@@ -13,6 +14,8 @@ router.get('/health', (_req, res) => {
 })
 
 router.use('/auth', authRoutes)
+
+router.use(requireAuth)
 router.use('/contacts', contactsRoutes)
 router.use('/pipeline', pipelineRoutes)
 router.use('/tasks', taskRoutes)
