@@ -181,6 +181,35 @@ function buildDraftMessages({ contactName, objective, context }) {
   ];
 }
 
+function buildTaskExtractionMessages({ summaryText, todayYmd, timezone }) {
+  return [
+    {
+      role: "system",
+      content: [
+        "You extract actionable follow-up tasks from financial-advisor interaction summaries.",
+        "Return STRICT JSON only with no markdown and no extra prose.",
+        "JSON contract:",
+        '{"tasks":[{"title":"string","description":"string","dueDate":"YYYYMMDD|null"}]}',
+        "Rules:",
+        "- Extract only explicit actions (follow-up call, send documents, schedule meeting, etc.).",
+        '- If no actionable tasks are present, return {"tasks":[]}',
+        "- dueDate must be an 8-digit YYYYMMDD string when inferable from text (for example: next Monday, tomorrow, 2026-04-20).",
+        "- Use null for dueDate when no clear date is inferable.",
+        "- Keep title concise (max 100 chars).",
+        "- Keep description concise (max 220 chars).",
+      ].join("\n"),
+    },
+    {
+      role: "user",
+      content: [
+        `Reference date (today): ${todayYmd}`,
+        `Timezone: ${timezone}`,
+        "Summary text:",
+        summaryText,
+      ].join("\n"),
+    },
+  ];
+}
 
 // Convert OpenAI-style messages to Gemini native format.
 // System messages become system_instruction; user/assistant become contents.
@@ -564,11 +593,147 @@ function createAIService(config = {}) {
     return result;
   }
 
+  async function extractTasksFromSummary({
+    summaryText,
+    todayYmd,
+    timezone = "Asia/Singapore",
+  }) {
+    validateInputText(summaryText, options.maxInputChars);
+    validateContentSafety(summaryText, "task-extraction-input");
+    const startedAt = Date.now();
+
+    logAIEvent("info", "task_extraction_started", {
+      provider: options.provider,
+      model: options.primaryModel,
+      path: "extractTasksFromSummary",
+      inputText: summaryText,
+      todayYmd,
+      timezone,
+    });
+
+    const messages = buildTaskExtractionMessages({
+      summaryText,
+      todayYmd,
+      timezone,
+    });
+    const inputTokens = validateInputTokenLimit(
+      messages.map((message) => message.content).join("\n"),
+      options.maxInputTokens,
+    );
+    const apiKey = requireGeminiApiKey();
+
+    const runForModel = async (model) => {
+      const text = await withRetry(
+        () =>
+          callGemini({
+            apiKey,
+            model,
+            messages,
+            maxOutputTokens: Math.min(options.maxOutputTokens, 500),
+            timeoutMs: options.timeoutMs,
+          }),
+        {
+          maxRetries: options.maxRetries,
+          retryBackoffMs: options.retryBackoffMs,
+        },
+      );
+
+      validateOutputLength(text, 3000, "task extraction");
+
+      const outputTokens = estimateTokenCount(text);
+      return {
+        text,
+        model,
+        usage: {
+          estimatedInputTokens: inputTokens,
+          estimatedOutputTokens: outputTokens,
+          estimatedCostUsd: estimateCostUsd({
+            model,
+            inputTokens,
+            outputTokens,
+          }),
+        },
+      };
+    };
+
+    try {
+      const result = await runForModel(options.primaryModel);
+      logAIEvent("info", "task_extraction_succeeded", {
+        provider: options.provider,
+        model: result.model,
+        path: "extractTasksFromSummary",
+        inputText: summaryText,
+        outputText: result.text,
+        usage: result.usage,
+        durationMs: Date.now() - startedAt,
+      });
+      return result;
+    } catch (primaryError) {
+      if (
+        !options.fallbackModel ||
+        options.fallbackModel === options.primaryModel
+      ) {
+        logAIEvent("error", "task_extraction_failed", {
+          provider: options.provider,
+          model: options.primaryModel,
+          path: "extractTasksFromSummary",
+          inputText: summaryText,
+          statusCode: primaryError?.statusCode || null,
+          errorMessage:
+            primaryError?.message || "AI task extraction request failed",
+          errorDetails: primaryError?.details || null,
+          durationMs: Date.now() - startedAt,
+        });
+        throw primaryError;
+      }
+
+      logAIEvent("warn", "task_extraction_primary_failed_using_fallback", {
+        provider: options.provider,
+        model: options.primaryModel,
+        path: "extractTasksFromSummary",
+        inputText: summaryText,
+        statusCode: primaryError?.statusCode || null,
+        errorMessage: primaryError?.message || "Primary model failed",
+        errorDetails: primaryError?.details || null,
+      });
+
+      try {
+        const fallbackResult = await runForModel(options.fallbackModel);
+        logAIEvent("info", "task_extraction_succeeded", {
+          provider: options.provider,
+          model: fallbackResult.model,
+          path: "extractTasksFromSummary",
+          inputText: summaryText,
+          outputText: fallbackResult.text,
+          usage: fallbackResult.usage,
+          durationMs: Date.now() - startedAt,
+        });
+
+        return fallbackResult;
+      } catch (fallbackError) {
+        logAIEvent("error", "task_extraction_failed", {
+          provider: options.provider,
+          model: options.fallbackModel,
+          path: "extractTasksFromSummary",
+          inputText: summaryText,
+          statusCode: fallbackError?.statusCode || null,
+          errorMessage:
+            fallbackError?.message || "AI task extraction request failed",
+          errorDetails: fallbackError?.details || null,
+          durationMs: Date.now() - startedAt,
+        });
+        throw fallbackError;
+      }
+    }
+  }
+
   return {
     buildSummaryMessages,
     buildDraftMessages,
+    buildTaskExtractionMessages,
     generateSummary,
     draftMessage,
+    extractTasksFromSummary,
     estimateTokenCount,
     estimateCostUsd,
     validateContentSafety,
@@ -581,6 +746,7 @@ module.exports = {
   createAIService,
   buildSummaryMessages,
   buildDraftMessages,
+  buildTaskExtractionMessages,
   estimateTokenCount,
   estimateCostUsd,
 };

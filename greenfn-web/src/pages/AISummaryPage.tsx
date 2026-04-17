@@ -17,6 +17,15 @@ import { Textarea } from "../components/ui/textarea";
 
 type SummaryPreviewState = {
   summaryId: string | null;
+  interactionId: string | null;
+  interactionLinked: boolean;
+  interactionCreated: boolean;
+  tasksCreatedCount: number;
+  tasksCreated: Array<{
+    id: string;
+    title: string;
+    dueDateYmd: string | null;
+  }>;
   generatedSummary: string;
   editableSummary: string;
   sourceMode: FormState["mode"];
@@ -179,6 +188,27 @@ function AISummaryPage() {
       setPreviewError("");
       setSummaryPreview({
         summaryId: summary.id || null,
+        interactionId: summary.interactionId || null,
+        interactionLinked: Boolean(summary.interactionLinked),
+        interactionCreated: Boolean(summary.interactionCreated),
+        tasksCreatedCount: Number(summary.tasksCreatedCount || 0),
+        tasksCreated: Array.isArray(summary.tasksCreated)
+          ? summary.tasksCreated.map(
+              (task: {
+                id?: unknown;
+                title?: unknown;
+                dueDateYmd?: unknown;
+              }) => ({
+                id: typeof task.id === "string" ? task.id : "",
+                title:
+                  typeof task.title === "string"
+                    ? task.title
+                    : "Auto-created task",
+                dueDateYmd:
+                  typeof task.dueDateYmd === "string" ? task.dueDateYmd : null,
+              }),
+            )
+          : [],
         generatedSummary: summary.text,
         editableSummary: summary.text,
         sourceMode: formData.mode,
@@ -214,9 +244,34 @@ function AISummaryPage() {
     }
 
     setPreviewError("");
+
+    if (summaryPreview.summaryId && summaryPreview.interactionLinked) {
+      const interactionAction = summaryPreview.interactionCreated
+        ? "created"
+        : "updated";
+      const interactionIdText = summaryPreview.interactionId
+        ? ` (ID: ${summaryPreview.interactionId})`
+        : "";
+      const tasksInfo =
+        summaryPreview.tasksCreatedCount > 0
+          ? ` Auto-created ${summaryPreview.tasksCreatedCount} task(s): ${summaryPreview.tasksCreated
+              .map((task) =>
+                task.dueDateYmd
+                  ? `${task.title} [${task.dueDateYmd}]`
+                  : task.title,
+              )
+              .join("; ")}.`
+          : " No dated follow-up tasks were inferred from this summary.";
+
+      setSaveSuccessMessage(
+        `Summary saved (ID: ${summaryPreview.summaryId}) and logged in Interaction History via ${interactionAction} interaction${interactionIdText}.${tasksInfo}`,
+      );
+      return;
+    }
+
     setSaveSuccessMessage(
       summaryPreview.summaryId
-        ? `Summary is already saved in database (ID: ${summaryPreview.summaryId}).`
+        ? `Summary is saved in database (ID: ${summaryPreview.summaryId}), but no linked interaction was reported.`
         : "Summary generated, but no persisted summary ID was returned.",
     );
   }

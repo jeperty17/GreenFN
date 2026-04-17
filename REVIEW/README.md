@@ -24,6 +24,8 @@ This folder contains per-task review files for completed setup tasks.
 - `CORS_ALLOWLIST.md` — Production CORS allowlist configuration and verification.
 - `CICD_SETUP.md` — GitHub Actions CI/CD for main-branch deploys and PR preview deployments.
 - `CONTACTS_HUB.md` — Contacts Hub table/search/filter implementation with backend list endpoint and verification notes.
+- `LEADS_PIPELINE.md` — Leads Pipeline transition reliability checks, guardrails, follow-up trigger, and audit-history verification.
+- `TASKS.md` — Today view task-bucket rendering, task actions, and follow-up suggestion prompt verification.
 - `INTERACTION_HISTORY.md` — Interaction History per-contact chronological timeline frontend implementation and verification notes.
 - `INTERNAL_VALIDATION_CONSOLE.md` — Backend-only localhost validation dashboard for feature flow checks and recent CRUD traces.
 

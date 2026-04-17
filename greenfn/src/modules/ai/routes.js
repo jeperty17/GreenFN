@@ -14,6 +14,8 @@ const router = express.Router();
 const aiService = createAIService({ timeoutMs: AI_TIMEOUT_MS });
 const AI_SUMMARY_MARKER = "greenfn-ai-summary-v1";
 const SUMMARY_RETENTION_DAYS = 365;
+const TASK_EXTRACTION_LIMIT = 5;
+const SUMMARY_NOTE_PREVIEW_MAX_CHARS = 220;
 const aiRequestWindowStore = new Map();
 
 const SUPPORTED_SUMMARY_SOURCE_MODES = new Set([
@@ -264,7 +266,7 @@ function validateGenerateSummary(body) {
 async function assertContactExists(contactId) {
   const contact = await prisma.contact.findUnique({
     where: { id: contactId },
-    select: { id: true },
+    select: { id: true, advisorId: true },
   });
 
   if (!contact) {
@@ -273,6 +275,8 @@ async function assertContactExists(contactId) {
       contactId,
     });
   }
+
+  return contact;
 }
 
 function buildStoredSummaryLink({
@@ -379,29 +383,330 @@ function isAiProviderUnavailable(error) {
   return false;
 }
 
+function normalizeWhitespace(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildSummaryPreviewNote(summaryText) {
+  const normalized = normalizeWhitespace(summaryText);
+
+  if (!normalized) {
+    return "AI Summary";
+  }
+
+  if (normalized.length <= SUMMARY_NOTE_PREVIEW_MAX_CHARS) {
+    return `AI Summary: ${normalized}`;
+  }
+
+  return `AI Summary: ${normalized.slice(0, SUMMARY_NOTE_PREVIEW_MAX_CHARS - 1)}...`;
+}
+
+function buildYmd(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}${month}${day}`;
+}
+
+function parseYmdToDate(ymd) {
+  if (!/^\d{8}$/.test(String(ymd || ""))) {
+    return null;
+  }
+
+  const year = Number(ymd.slice(0, 4));
+  const month = Number(ymd.slice(4, 6));
+  const day = Number(ymd.slice(6, 8));
+  const parsed = new Date(year, month - 1, day, 12, 0, 0, 0);
+
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function stripCodeFence(text) {
+  const trimmed = String(text || "").trim();
+
+  if (!trimmed.startsWith("```") || !trimmed.endsWith("```")) {
+    return trimmed;
+  }
+
+  return trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+}
+
+function safeParseJson(text) {
+  const normalized = stripCodeFence(text);
+  const firstBrace = normalized.indexOf("{");
+  const lastBrace = normalized.lastIndexOf("}");
+
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    return null;
+  }
+
+  const candidate = normalized.slice(firstBrace, lastBrace + 1);
+
+  try {
+    return JSON.parse(candidate);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function resolveWeekdayIndex(name) {
+  const normalized = String(name || "")
+    .trim()
+    .toLowerCase();
+  const map = {
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+  };
+  return Object.prototype.hasOwnProperty.call(map, normalized)
+    ? map[normalized]
+    : null;
+}
+
+function getNextWeekday(baseDate, weekdayIndex) {
+  const next = new Date(baseDate);
+  const currentWeekday = next.getDay();
+  let delta = (weekdayIndex - currentWeekday + 7) % 7;
+  if (delta === 0) {
+    delta = 7;
+  }
+
+  next.setDate(next.getDate() + delta);
+  return next;
+}
+
+function inferYmdFromText(text, baseDate) {
+  const normalized = String(text || "")
+    .trim()
+    .toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const directYmd = normalized.match(/\b(\d{4})(\d{2})(\d{2})\b/);
+  if (directYmd) {
+    const ymd = `${directYmd[1]}${directYmd[2]}${directYmd[3]}`;
+    return parseYmdToDate(ymd) ? ymd : null;
+  }
+
+  const isoDate = normalized.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (isoDate) {
+    const ymd = `${isoDate[1]}${isoDate[2]}${isoDate[3]}`;
+    return parseYmdToDate(ymd) ? ymd : null;
+  }
+
+  if (normalized.includes("today")) {
+    return buildYmd(baseDate);
+  }
+
+  if (normalized.includes("tomorrow")) {
+    const tomorrow = new Date(baseDate);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return buildYmd(tomorrow);
+  }
+
+  const nextWeekdayMatch = normalized.match(
+    /\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+  );
+  if (nextWeekdayMatch) {
+    const weekday = resolveWeekdayIndex(nextWeekdayMatch[1]);
+    if (weekday !== null) {
+      return buildYmd(getNextWeekday(baseDate, weekday));
+    }
+  }
+
+  const weekdayMatch = normalized.match(
+    /\b(on\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+  );
+  if (weekdayMatch) {
+    const weekday = resolveWeekdayIndex(weekdayMatch[2]);
+    if (weekday !== null) {
+      return buildYmd(getNextWeekday(baseDate, weekday));
+    }
+  }
+
+  return null;
+}
+
+function normalizeExtractedTask(rawTask, baseDate) {
+  if (!rawTask || typeof rawTask !== "object") {
+    return null;
+  }
+
+  const title = normalizeWhitespace(rawTask.title);
+  if (!title) {
+    return null;
+  }
+
+  const description = normalizeWhitespace(rawTask.description) || title;
+  const rawDueDate =
+    rawTask.dueDate === null || rawTask.dueDate === undefined
+      ? null
+      : String(rawTask.dueDate).trim();
+
+  const dueDateYmd = rawDueDate
+    ? inferYmdFromText(rawDueDate, baseDate)
+    : inferYmdFromText(`${title} ${description}`, baseDate);
+
+  return {
+    title: title.slice(0, 100),
+    description: description.slice(0, 220),
+    dueDateYmd,
+  };
+}
+
+function fallbackTaskCandidates(summaryText, baseDate) {
+  const lines = String(summaryText || "")
+    .split(/\r?\n+/)
+    .map((line) => normalizeWhitespace(line.replace(/^[-*]\s*/, "")))
+    .filter(Boolean);
+
+  return lines
+    .filter((line) =>
+      /(follow up|follow-up|schedule|call|meeting|send|review|task|remind|prepare)/i.test(
+        line,
+      ),
+    )
+    .slice(0, TASK_EXTRACTION_LIMIT)
+    .map((line) => ({
+      title: line,
+      description: `Auto-created from AI summary: ${line}`,
+      dueDate: inferYmdFromText(line, baseDate),
+    }));
+}
+
+async function buildTaskCandidatesFromSummary({
+  summaryText,
+  generatedAt,
+  timezone,
+}) {
+  const baseDate = new Date(generatedAt);
+
+  try {
+    const extractionResult = await aiService.extractTasksFromSummary({
+      summaryText,
+      todayYmd: buildYmd(baseDate),
+      timezone,
+    });
+
+    const parsed = safeParseJson(extractionResult.text);
+    const rawTasks = Array.isArray(parsed?.tasks) ? parsed.tasks : [];
+
+    return rawTasks
+      .map((task) => normalizeExtractedTask(task, baseDate))
+      .filter(Boolean)
+      .slice(0, TASK_EXTRACTION_LIMIT);
+  } catch (_error) {
+    return fallbackTaskCandidates(summaryText, baseDate)
+      .map((task) => normalizeExtractedTask(task, baseDate))
+      .filter(Boolean)
+      .slice(0, TASK_EXTRACTION_LIMIT);
+  }
+}
+
+async function createTasksFromCandidates({ contactId, candidates }) {
+  const seen = new Set();
+  const createdTasks = [];
+
+  for (const candidate of candidates) {
+    if (!candidate?.dueDateYmd) {
+      continue;
+    }
+
+    const dueAt = parseYmdToDate(candidate.dueDateYmd);
+    if (!dueAt) {
+      continue;
+    }
+
+    const dedupeKey = `${candidate.title.toLowerCase()}|${candidate.dueDateYmd}`;
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+    seen.add(dedupeKey);
+
+    const task = await prisma.nextStep.create({
+      data: {
+        contactId,
+        title: candidate.title,
+        description: candidate.description,
+        dueAt,
+        status: "OPEN",
+      },
+      select: {
+        id: true,
+        title: true,
+        dueAt: true,
+      },
+    });
+
+    createdTasks.push({
+      id: task.id,
+      title: task.title,
+      dueAt: task.dueAt ? task.dueAt.toISOString() : null,
+      dueDateYmd: candidate.dueDateYmd,
+    });
+  }
+
+  return createdTasks;
+}
+
 async function linkSummaryToInteraction({
   interactionId,
   contactId,
+  advisorId,
   summaryRecordId,
   summaryText,
   model,
   sourceMode,
   generatedAt,
 }) {
+  const summaryLink = buildStoredSummaryLink({
+    summaryText,
+    model,
+    sourceMode,
+    generatedAt,
+  });
+
   if (!interactionId) {
-    return false;
+    const createdInteraction = await prisma.interaction.create({
+      data: {
+        contactId,
+        advisorId,
+        type: "NOTE",
+        occurredAt: generatedAt,
+        notes: buildSummaryPreviewNote(summaryText),
+        aiSummaryRecordId: summaryRecordId,
+        aiSummary: summaryLink,
+      },
+      select: { id: true },
+    });
+
+    return {
+      linked: true,
+      interactionId: createdInteraction.id,
+      interactionCreated: true,
+    };
   }
 
   const updated = await prisma.interaction.updateMany({
     where: { id: interactionId, contactId },
     data: {
       aiSummaryRecordId: summaryRecordId,
-      aiSummary: buildStoredSummaryLink({
-        summaryText,
-        model,
-        sourceMode,
-        generatedAt,
-      }),
+      aiSummary: summaryLink,
     },
   });
 
@@ -417,7 +722,11 @@ async function linkSummaryToInteraction({
     );
   }
 
-  return true;
+  return {
+    linked: true,
+    interactionId,
+    interactionCreated: false,
+  };
 }
 
 router.get("/", (_req, res) => {
@@ -440,7 +749,7 @@ router.post(
   async (req, res, next) => {
     try {
       const contactId = req.body.contactId.trim();
-      await assertContactExists(contactId);
+      const contact = await assertContactExists(contactId);
 
       const { sourceMode, input } = buildSummaryInputFromRequest(req.body);
 
@@ -502,17 +811,31 @@ router.post(
         },
       });
 
-      const linkedToInteraction = await linkSummaryToInteraction({
-        interactionId:
-          typeof req.body.interactionId === "string"
-            ? req.body.interactionId.trim()
-            : null,
+      const requestedInteractionId =
+        typeof req.body.interactionId === "string" &&
+        req.body.interactionId.trim().length > 0
+          ? req.body.interactionId.trim()
+          : null;
+
+      const interactionLink = await linkSummaryToInteraction({
+        interactionId: requestedInteractionId,
         contactId,
+        advisorId: contact.advisorId,
         summaryRecordId: summaryRecord.id,
         summaryText: summaryResult.text,
         model: summaryResult.model || null,
         sourceMode,
         generatedAt,
+      });
+
+      const taskCandidates = await buildTaskCandidatesFromSummary({
+        summaryText: summaryResult.text,
+        generatedAt,
+        timezone: "Asia/Singapore",
+      });
+      const createdTasks = await createTasksFromCandidates({
+        contactId,
+        candidates: taskCandidates,
       });
 
       res.status(200).json({
@@ -528,7 +851,12 @@ router.post(
           generatedAt: generatedAt.toISOString(),
           retentionUntil: retentionUntil.toISOString(),
           deletedAt: null,
-          interactionLinked: linkedToInteraction,
+          interactionLinked: interactionLink.linked,
+          interactionId: interactionLink.interactionId,
+          interactionCreated: interactionLink.interactionCreated,
+          taskCandidatesFound: taskCandidates.length,
+          tasksCreatedCount: createdTasks.length,
+          tasksCreated: createdTasks,
         },
       });
     } catch (error) {

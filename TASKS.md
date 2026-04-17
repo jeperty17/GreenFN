@@ -93,26 +93,26 @@
 - [x] Build kanban board with pipeline columns (New, Contacted, Booked, No-show, In Progress, Closed Won, Closed Lost).
 - [x] Render each lead as a draggable card with key contact details.
 - [x] Implement drag-and-drop status changes with optimistic UI updates.
-- [ ] Show visual feedback and error recovery when status update fails.
+- [x] Show visual feedback and error recovery when status update fails.
 
 ### BACKEND
 
 - [x] Implement endpoint to fetch pipeline grouped by stage.
 - [x] Implement endpoint to update lead stage with transition timestamp.
-- [ ] Implement guardrails for valid stage transitions.
-- [ ] Emit follow-up suggestion trigger after stage changes.
+- [x] Implement guardrails for valid stage transitions.
+- [x] Emit follow-up suggestion trigger after stage changes.
 
 ### DB
 
 - [x] Create pipeline stage enum/table and stage order metadata.
 - [x] Add current stage and stage-updated-at fields to contacts/leads.
-- [ ] Add stage transition history table for auditability.
+- [x] Add stage transition history table for auditability.
 - [x] Seed default stage values for new leads.
 
 ### DEPLOYMENT
 
 - [ ] Validate drag-and-drop stage updates in production-like environment.
-- [ ] Enable structured logs for stage transition events.
+- [x] Enable structured logs for stage transition events.
 - [ ] Add rollback plan for schema changes affecting stage enums/history.
 
 ## To-Do List (Today View)
@@ -122,7 +122,7 @@
 - [x] Build Today view showing due-today and overdue next steps.
 - [x] Build task creation/edit UI for per-contact next step text and due date.
 - [x] Add quick actions for complete, snooze, and reschedule.
-- [ ] Add optional nudge prompt after pipeline stage movement.
+- [x] Add optional nudge prompt after pipeline stage movement.
 
 ### BACKEND
 
@@ -141,7 +141,7 @@
 ### DEPLOYMENT
 
 - [ ] Configure scheduled job/worker for reminders and daily task checks.
-- [ ] Ensure timezone handling is consistent between frontend and backend.
+- [x] Ensure timezone handling is consistent between frontend and backend.
 - [ ] Add alerting for failed scheduled jobs.
 
 ## Interaction History

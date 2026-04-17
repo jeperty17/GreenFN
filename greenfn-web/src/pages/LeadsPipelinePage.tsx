@@ -35,6 +35,26 @@ interface ContactListItem {
   source: string | null;
 }
 
+interface FollowUpSuggestion {
+  contactId: string;
+  triggered: boolean;
+  triggerType: string;
+  contactName: string;
+  fromStageName: string;
+  toStageName: string;
+  message: string;
+  suggestedDueDateYmd: string;
+  suggestedTaskTitle: string;
+}
+
+function ymdToDateInputValue(ymd: string): string {
+  if (!/^\d{8}$/.test(ymd)) {
+    return "";
+  }
+
+  return `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`;
+}
+
 function daysSinceLabel(lastInteractionAt: string | null): string {
   if (!lastInteractionAt) return "No contact";
   const days = Math.floor(
@@ -52,8 +72,21 @@ async function getApiErrorMessage(
 ): Promise<string> {
   try {
     const payload = await response.json();
+    if (
+      typeof payload?.error?.message === "string" &&
+      payload.error.message.trim()
+    ) {
+      return payload.error.message;
+    }
     if (typeof payload?.message === "string" && payload.message.trim()) {
       return payload.message;
+    }
+    if (
+      Array.isArray(payload?.error?.details) &&
+      payload.error.details.length > 0 &&
+      typeof payload.error.details[0]?.message === "string"
+    ) {
+      return payload.error.details[0].message;
     }
     if (
       Array.isArray(payload?.details) &&
@@ -88,6 +121,11 @@ function LeadsPipelinePage() {
   // Set when a card is dragged to a new column — opens the 2-step transition modal.
   const [pendingTransition, setPendingTransition] =
     useState<PendingTransition | null>(null);
+
+  const [followUpSuggestion, setFollowUpSuggestion] =
+    useState<FollowUpSuggestion | null>(null);
+
+  const [isCreatingSuggestedTask, setIsCreatingSuggestedTask] = useState(false);
 
   // Snapshot of stages before the optimistic move, so Undo can revert it.
   const [stageSnapshot, setStageSnapshot] = useState<PipelineStage[] | null>(
@@ -287,6 +325,19 @@ function LeadsPipelinePage() {
         toast.error(errorMessage);
         throw new Error(`notified:patch:${res.status}`);
       }
+      const responsePayload = await res.json().catch(() => null);
+      const suggestion = responsePayload?.followUpSuggestion;
+      if (suggestion?.triggered) {
+        setFollowUpSuggestion({
+          ...(suggestion as Omit<FollowUpSuggestion, "contactId">),
+          contactId,
+        });
+        toast.success("Follow-up suggestion ready.", {
+          description:
+            suggestion.message ||
+            "A suggested follow-up task is available for this stage change.",
+        });
+      }
       successMessages.push("Stage updated successfully.");
 
       if (interaction) {
@@ -390,11 +441,97 @@ function LeadsPipelinePage() {
     setStageSnapshot(null);
   }
 
+  async function handleCreateSuggestedTask() {
+    if (!followUpSuggestion) {
+      return;
+    }
+
+    setIsCreatingSuggestedTask(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/tasks`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          contactId: followUpSuggestion.contactId,
+          title: followUpSuggestion.suggestedTaskTitle,
+          description: followUpSuggestion.message,
+          dueAt: ymdToDateInputValue(followUpSuggestion.suggestedDueDateYmd),
+        }),
+      });
+
+      if (!response.ok) {
+        const errorMessage = await getApiErrorMessage(
+          response,
+          "Failed to create suggested follow-up task.",
+        );
+        toast.error(errorMessage);
+        return;
+      }
+
+      toast.success("Suggested follow-up task created.");
+      setFollowUpSuggestion(null);
+      setRefreshTrigger((current) => current + 1);
+    } finally {
+      setIsCreatingSuggestedTask(false);
+    }
+  }
+
+  function handleDismissSuggestion() {
+    setFollowUpSuggestion(null);
+  }
+
   return (
     <section className="page-section space-y-6">
       <div className="flex items-start justify-between gap-4">
         <div>
           <h2>Leads Pipeline</h2>
+
+          {followUpSuggestion && (
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="space-y-3 p-4">
+                <div className="flex flex-wrap items-center gap-2">
+                  <Badge variant="secondary">Follow-up Suggestion</Badge>
+                  <Badge variant="outline">
+                    Due: {followUpSuggestion.suggestedDueDateYmd}
+                  </Badge>
+                  <Badge variant="outline">
+                    {followUpSuggestion.fromStageName} →{" "}
+                    {followUpSuggestion.toStageName}
+                  </Badge>
+                </div>
+                <div className="space-y-1">
+                  <p className="text-sm font-medium">
+                    {followUpSuggestion.suggestedTaskTitle}
+                  </p>
+                  <p className="text-sm text-muted-foreground">
+                    {followUpSuggestion.message}
+                  </p>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  <Button
+                    type="button"
+                    onClick={handleCreateSuggestedTask}
+                    disabled={isCreatingSuggestedTask}
+                  >
+                    {isCreatingSuggestedTask
+                      ? "Creating…"
+                      : "Create Suggested Task"}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    onClick={handleDismissSuggestion}
+                    disabled={isCreatingSuggestedTask}
+                  >
+                    Dismiss
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          )}
           <p className="field-hint">
             Contacts grouped by stage. Drag cards between columns to progress
             leads.

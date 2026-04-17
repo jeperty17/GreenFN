@@ -35,6 +35,12 @@ type InteractionLog = {
   type: InteractionType;
   interactionDate: string;
   notes: string;
+  aiSummaryLink: {
+    summaryText: string | null;
+    model: string | null;
+    sourceMode: string | null;
+    generatedAt: string | null;
+  } | null;
   relatedTask: {
     id: string;
     title: string;
@@ -47,6 +53,12 @@ type InteractionApiItem = {
   type: string;
   occurredAt: string;
   notes: string | null;
+  aiSummaryLink?: {
+    summaryText?: string | null;
+    model?: string | null;
+    sourceMode?: string | null;
+    generatedAt?: string | null;
+  } | null;
 };
 
 type InteractionsResponse = {
@@ -95,6 +107,14 @@ function mapInteractionFromApi(item: InteractionApiItem): InteractionLog {
     type: normalizeInteractionType(item.type),
     interactionDate: item.occurredAt,
     notes: item.notes || "",
+    aiSummaryLink: item.aiSummaryLink
+      ? {
+          summaryText: item.aiSummaryLink.summaryText || null,
+          model: item.aiSummaryLink.model || null,
+          sourceMode: item.aiSummaryLink.sourceMode || null,
+          generatedAt: item.aiSummaryLink.generatedAt || null,
+        }
+      : null,
     relatedTask: null,
   };
 }
@@ -118,6 +138,17 @@ function formatDateTime(dateString: string) {
   }).format(new Date(dateString));
 }
 
+function summarizeText(value: string, maxChars = 280) {
+  const normalized = String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+  if (normalized.length <= maxChars) {
+    return normalized;
+  }
+
+  return `${normalized.slice(0, maxChars - 1)}...`;
+}
+
 function InteractionHistoryPage() {
   const [contacts, setContacts] = useState<ContactItem[]>([]);
   const [selectedContactId, setSelectedContactId] = useState<string>("");
@@ -135,6 +166,9 @@ function InteractionHistoryPage() {
   const [typeFilter, setTypeFilter] = useState<"ALL" | InteractionType>("ALL");
   const [startDateFilter, setStartDateFilter] = useState("");
   const [endDateFilter, setEndDateFilter] = useState("");
+  const [expandedSummaryIds, setExpandedSummaryIds] = useState<Set<string>>(
+    new Set(),
+  );
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -204,6 +238,7 @@ function InteractionHistoryPage() {
 
         const payload: InteractionsResponse = await response.json();
         setInteractionLogs((payload.items || []).map(mapInteractionFromApi));
+        setExpandedSummaryIds(new Set());
       } catch (error) {
         if ((error as Error).name === "AbortError") {
           return;
@@ -272,6 +307,18 @@ function InteractionHistoryPage() {
     setTypeFilter("ALL");
     setStartDateFilter("");
     setEndDateFilter("");
+  }
+
+  function toggleSummaryExpansion(interactionId: string) {
+    setExpandedSummaryIds((currentState) => {
+      const next = new Set(currentState);
+      if (next.has(interactionId)) {
+        next.delete(interactionId);
+      } else {
+        next.add(interactionId);
+      }
+      return next;
+    });
   }
 
   async function handleSubmitInteraction(event: FormEvent<HTMLFormElement>) {
@@ -551,6 +598,53 @@ function InteractionHistoryPage() {
                       </p>
                     </div>
                     <p className="text-sm leading-6">{entry.notes}</p>
+                    {entry.aiSummaryLink?.summaryText && (
+                      <div className="rounded-md border border-border bg-muted/30 p-3">
+                        <div className="mb-2 flex flex-wrap items-center gap-2">
+                          <Badge variant="outline">AI Summary</Badge>
+                          {entry.aiSummaryLink.sourceMode && (
+                            <Badge variant="secondary">
+                              Mode: {entry.aiSummaryLink.sourceMode}
+                            </Badge>
+                          )}
+                          {entry.aiSummaryLink.model && (
+                            <Badge variant="outline">
+                              Model: {entry.aiSummaryLink.model}
+                            </Badge>
+                          )}
+                        </div>
+
+                        {expandedSummaryIds.has(entry.id) ? (
+                          <div className="space-y-2">
+                            <p className="whitespace-pre-wrap text-sm leading-6">
+                              {entry.aiSummaryLink.summaryText}
+                            </p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => toggleSummaryExpansion(entry.id)}
+                            >
+                              Hide Full Summary
+                            </Button>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            <p className="whitespace-pre-wrap text-sm leading-6">
+                              {summarizeText(entry.aiSummaryLink.summaryText)}
+                            </p>
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="sm"
+                              onClick={() => toggleSummaryExpansion(entry.id)}
+                            >
+                              Show Full Summary
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    )}
                     {entry.relatedTask && (
                       <p className="text-sm">
                         <Link

@@ -8,6 +8,117 @@ const router = express.Router();
 // Hard-coded until auth is implemented
 const ADVISOR_ID = "seed-user-001";
 
+const TERMINAL_STAGES = new Set(["closed won", "closed lost"]);
+
+const ALLOWED_STAGE_TRANSITIONS = {
+  new: new Set(["contacted", "closed lost"]),
+  contacted: new Set(["booked", "no-show", "closed lost"]),
+  booked: new Set(["in progress", "no-show", "closed lost"]),
+  "no-show": new Set(["contacted", "closed lost"]),
+  "in progress": new Set(["closed won", "closed lost", "contacted"]),
+  "closed won": new Set([]),
+  "closed lost": new Set(["contacted"]),
+};
+
+function normalizeStageName(name) {
+  return String(name || "")
+    .trim()
+    .toLowerCase();
+}
+
+function buildYmd(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}${month}${day}`;
+}
+
+function logPipelineEvent(event, metadata = {}) {
+  const payload = {
+    event,
+    feature: "pipeline",
+    at: new Date().toISOString(),
+    ...metadata,
+  };
+  console.info("[pipeline]", JSON.stringify(payload));
+}
+
+function assertValidStageTransition({ fromStageName, toStageName }) {
+  const from = normalizeStageName(fromStageName);
+  const to = normalizeStageName(toStageName);
+
+  if (!from || !to || from === to) {
+    return;
+  }
+
+  if (TERMINAL_STAGES.has(from) && !ALLOWED_STAGE_TRANSITIONS[from]?.has(to)) {
+    throw httpError(422, "Invalid stage transition", {
+      fromStageName,
+      toStageName,
+      reason: "Cannot move from terminal stage without explicit reopen path",
+    });
+  }
+
+  const allowed = ALLOWED_STAGE_TRANSITIONS[from];
+  if (!allowed) {
+    // Custom stage names are allowed by default to avoid blocking user-defined pipelines.
+    return;
+  }
+
+  if (!allowed.has(to)) {
+    throw httpError(422, "Invalid stage transition", {
+      fromStageName,
+      toStageName,
+      reason: `Allowed transitions from ${fromStageName}: ${Array.from(allowed).join(", ") || "none"}`,
+    });
+  }
+}
+
+function buildFollowUpSuggestion({ fromStageName, toStageName, contactName }) {
+  const to = normalizeStageName(toStageName);
+  const now = new Date();
+  let dueDate = new Date(now);
+  let message =
+    "Add a follow-up touchpoint to keep momentum after this stage change.";
+
+  if (to === "contacted") {
+    dueDate.setDate(dueDate.getDate() + 2);
+    message =
+      "Suggest scheduling the next call within 48 hours to maintain response momentum.";
+  } else if (to === "booked") {
+    dueDate.setDate(dueDate.getDate() + 1);
+    message =
+      "Suggest confirming agenda and reminders before the booked meeting.";
+  } else if (to === "no-show") {
+    dueDate.setDate(dueDate.getDate() + 1);
+    message =
+      "Suggest a recovery outreach with a new proposed slot after no-show.";
+  } else if (to === "in progress") {
+    dueDate.setDate(dueDate.getDate() + 3);
+    message =
+      "Suggest setting a clear decision checkpoint while the case is in progress.";
+  } else if (to === "closed won") {
+    dueDate.setDate(dueDate.getDate() + 7);
+    message =
+      "Suggest a post-close check-in task for onboarding and relationship continuity.";
+  } else if (to === "closed lost") {
+    dueDate.setDate(dueDate.getDate() + 14);
+    message =
+      "Suggest a re-engagement reminder in two weeks with updated value proposition.";
+  }
+
+  return {
+    triggered: true,
+    triggerType: "pipeline-stage-change",
+    contactName,
+    fromStageName,
+    toStageName,
+    message,
+    suggestedDueDateYmd: buildYmd(dueDate),
+    suggestedTaskTitle: `Follow up with ${contactName}`,
+  };
+}
+
 // GET /api/pipeline
 // Returns all PipelineStages for the advisor in order, each with their contacts.
 // Each contact includes openTaskCount (OPEN NextSteps) and lastInteractionAt.
@@ -163,7 +274,10 @@ router.patch(
   validateBody(({ stages }) => {
     const errors = [];
     if (!Array.isArray(stages) || stages.length === 0) {
-      errors.push({ field: "stages", message: "stages must be a non-empty array" });
+      errors.push({
+        field: "stages",
+        message: "stages must be a non-empty array",
+      });
     }
     return errors;
   }),
@@ -189,7 +303,10 @@ router.patch(
       });
 
       if (existing.length !== ids.length) {
-        throw httpError(403, "One or more stages do not belong to this advisor");
+        throw httpError(
+          403,
+          "One or more stages do not belong to this advisor",
+        );
       }
 
       // PipelineStage has @@unique([advisorId, order]), so swapping two order
@@ -331,7 +448,13 @@ router.patch(
       const contact = await prisma.contact.findUnique({
         // validate contact exists and belongs to advisor
         where: { id: contactId },
-        select: { id: true, advisorId: true },
+        select: {
+          id: true,
+          advisorId: true,
+          fullName: true,
+          stageId: true,
+          stage: { select: { id: true, name: true } },
+        },
       });
 
       if (!contact) {
@@ -344,7 +467,7 @@ router.patch(
       const stage = await prisma.pipelineStage.findUnique({
         // validate stage exists and belongs to advisor
         where: { id: stageId },
-        select: { id: true, advisorId: true },
+        select: { id: true, advisorId: true, name: true },
       });
 
       if (!stage) {
@@ -354,12 +477,18 @@ router.patch(
         throw httpError(403, "Stage does not belong to this advisor");
       }
 
+      const fromStageName = contact.stage?.name || "Unstaged";
+      const toStageName = stage.name;
+      assertValidStageTransition({ fromStageName, toStageName });
+
+      const transitionedAt = new Date();
+
       const updated = await prisma.contact.update({
         // update contact with new stage and new stageUpdatedAt
         where: { id: contactId },
         data: {
           stageId,
-          stageUpdatedAt: new Date(),
+          stageUpdatedAt: transitionedAt,
         },
         select: {
           id: true,
@@ -369,8 +498,48 @@ router.patch(
         },
       });
 
-      res.json({ contact: updated });
+      await prisma.pipelineStageTransition.create({
+        data: {
+          contactId,
+          advisorId: ADVISOR_ID,
+          fromStageId: contact.stageId,
+          fromStageName,
+          toStageId: stage.id,
+          toStageName,
+          transitionedAt,
+        },
+      });
+
+      const followUpSuggestion = buildFollowUpSuggestion({
+        fromStageName,
+        toStageName,
+        contactName: contact.fullName,
+      });
+
+      logPipelineEvent("stage_transition_succeeded", {
+        contactId,
+        contactName: contact.fullName,
+        fromStageId: contact.stageId,
+        fromStageName,
+        toStageId: stage.id,
+        toStageName,
+        transitionedAt: transitionedAt.toISOString(),
+        suggestionDueDateYmd: followUpSuggestion.suggestedDueDateYmd,
+      });
+
+      res.json({
+        contact: updated,
+        followUpSuggestion,
+      });
     } catch (error) {
+      if (error?.statusCode === 422) {
+        logPipelineEvent("stage_transition_rejected", {
+          contactId: req.params.contactId,
+          stageId: req.body?.stageId || null,
+          reason:
+            error?.details?.reason || error?.message || "invalid transition",
+        });
+      }
       next(error);
     }
   },

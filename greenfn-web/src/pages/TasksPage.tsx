@@ -11,11 +11,20 @@ import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE_URL } from "../config/env";
 import { Button } from "../components/ui/button";
-import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs";
+import {
+  Tabs,
+  TabsList,
+  TabsTrigger,
+  TabsContent,
+} from "../components/ui/tabs";
 import TaskSection from "../components/tasks/TaskSection";
 import AddTaskModal from "../components/tasks/AddTaskModal";
 import CalendarView from "../components/tasks/CalendarView";
 import type { Task, TaskBucket } from "../components/tasks/types";
+import {
+  getTaskDateKey,
+  getTodayTaskDateKey,
+} from "../components/tasks/timezone";
 
 interface TasksApiResponse {
   overdue: Task[];
@@ -28,22 +37,12 @@ interface TasksApiResponse {
  * Returns null when the date falls beyond the 7-day upcoming window.
  */
 function categorizeDueDate(dueAt: string): TaskBucket | null {
-  const now = new Date();
-  const startOfToday = new Date(
-    now.getFullYear(),
-    now.getMonth(),
-    now.getDate(),
-  );
-  const startOfTomorrow = new Date(startOfToday);
-  startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
-  const endOfUpcoming = new Date(startOfToday);
-  endOfUpcoming.setDate(endOfUpcoming.getDate() + 8); // today+1 through today+7
+  const todayKey = getTodayTaskDateKey();
+  const dueDateKey = getTaskDateKey(dueAt);
 
-  const date = new Date(dueAt);
-  if (date < startOfToday) return "overdue";
-  if (date < startOfTomorrow) return "dueToday";
-  if (date < endOfUpcoming) return "upcoming";
-  return null;
+  if (dueDateKey < todayKey) return "overdue";
+  if (dueDateKey === todayKey) return "dueToday";
+  return "upcoming";
 }
 
 function sortByDueAt(tasks: Task[]): Task[] {
@@ -129,6 +128,9 @@ function TasksPage() {
       return;
     }
 
+    const payload = await res.json().catch(() => null);
+    const updatedApiTask: Task | null = payload?.task || null;
+
     // Find the task in whichever bucket it currently lives in
     const task =
       overdue.find((t) => t.id === taskId) ||
@@ -140,8 +142,8 @@ function TasksPage() {
     removeTask(taskId);
 
     // Place the updated task into its new bucket (or nowhere if beyond window)
-    const updatedTask: Task = { ...task, dueAt: newDueAt };
-    const newBucket = categorizeDueDate(newDueAt);
+    const updatedTask: Task = updatedApiTask || { ...task, dueAt: newDueAt };
+    const newBucket = categorizeDueDate(updatedTask.dueAt);
 
     if (newBucket === "overdue") {
       setOverdue((prev) => sortByDueAt([...prev, updatedTask]));

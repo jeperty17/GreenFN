@@ -2,6 +2,10 @@ const express = require("express");
 const prisma = require("../../lib/prisma");
 const { httpError } = require("../../utils/httpError");
 const { validateBody, requiredString } = require("../../middleware/validate");
+const {
+  getDateKeyInTimeZone,
+  getSingaporeTodayDateKey,
+} = require("./timezone");
 
 const router = express.Router();
 
@@ -55,16 +59,7 @@ router.get("/", async (req, res, next) => {
     }
 
     // List view: bucket tasks into overdue / dueToday / upcoming
-    const now = new Date();
-    const startOfToday = new Date(
-      now.getFullYear(),
-      now.getMonth(),
-      now.getDate(),
-    );
-    const startOfTomorrow = new Date(startOfToday);
-    startOfTomorrow.setDate(startOfTomorrow.getDate() + 1);
-    const endOfUpcoming = new Date(startOfToday);
-    endOfUpcoming.setDate(endOfUpcoming.getDate() + 8); // covers today+1 through today+7
+    const todayKey = getSingaporeTodayDateKey();
 
     const overdue = [];
     const dueToday = [];
@@ -72,11 +67,13 @@ router.get("/", async (req, res, next) => {
 
     for (const task of tasks) {
       const data = formatTask(task);
-      if (task.dueAt < startOfToday) {
+      const dueDateKey = getDateKeyInTimeZone(task.dueAt);
+
+      if (dueDateKey < todayKey) {
         overdue.push(data);
-      } else if (task.dueAt < startOfTomorrow) {
+      } else if (dueDateKey === todayKey) {
         dueToday.push(data);
-      } else if (task.dueAt < endOfUpcoming) {
+      } else {
         upcoming.push(data);
       }
     }

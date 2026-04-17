@@ -11,6 +11,7 @@ import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
 import { Card, CardContent } from "../ui/card";
 import type { Task, TaskBucket } from "./types";
+import { formatTaskDate } from "./timezone";
 
 interface TaskCardProps {
   task: Task;
@@ -21,11 +22,7 @@ interface TaskCardProps {
 }
 
 function formatDate(isoString: string): string {
-  return new Date(isoString).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatTaskDate(isoString);
 }
 
 function TaskCard({

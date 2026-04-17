@@ -13,6 +13,7 @@ model User {
 
   contacts  Contact[]
   interactions Interaction[]
+  stageTransitions PipelineStageTransition[]
   stages    PipelineStage[]
   tags      Tag[]
   templates MessageTemplate[]
@@ -49,6 +50,7 @@ model Contact {
   policyMetadata   Json?
 
   interactions  Interaction[]
+  stageTransitions PipelineStageTransition[]
   aiSummaries   AiSummary[]
   nextSteps     NextStep[]
   conversations Conversation[]
@@ -71,6 +73,29 @@ model Contact {
   @@index([phone])
   @@index([source])
   @@index([sourceCategory])
+}
+
+model PipelineStageTransition {
+  id String @id @default(cuid())
+
+  contactId String
+  contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+
+  advisorId String
+  advisor   User @relation(fields: [advisorId], references: [id], onDelete: Cascade)
+
+  fromStageId   String?
+  fromStageName String
+  toStageId     String
+  toStageName   String
+
+  transitionedAt DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  @@index([contactId, transitionedAt])
+  @@index([advisorId, transitionedAt])
+  @@index([fromStageId])
+  @@index([toStageId])
 }
 
 model PipelineStage {

@@ -5,20 +5,21 @@
  * Calls POST /api/tasks on submit; invokes onSuccess so the parent can refetch.
  */
 
-import { useEffect, useState } from 'react';
-import { Button } from '../ui/button';
+import { useEffect, useState } from "react";
+import { Button } from "../ui/button";
 import {
   Dialog,
   DialogContent,
   DialogFooter,
   DialogHeader,
   DialogTitle,
-} from '../ui/dialog';
-import { Input } from '../ui/input';
-import { Label } from '../ui/label';
-import { Textarea } from '../ui/textarea';
-import { API_BASE_URL } from '../../config/env';
-import type { ContactOption } from './types';
+} from "../ui/dialog";
+import { Input } from "../ui/input";
+import { Label } from "../ui/label";
+import { Textarea } from "../ui/textarea";
+import { API_BASE_URL } from "../../config/env";
+import type { ContactOption } from "./types";
+import { getTodayTaskDateKey } from "./timezone";
 
 interface AddTaskModalProps {
   isOpen: boolean;
@@ -32,12 +33,12 @@ function AddTaskModal({ isOpen, onClose, onSuccess }: AddTaskModalProps) {
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
 
   // Form field state
-  const [contactId, setContactId] = useState('');
-  const [title, setTitle] = useState('');
-  const [description, setDescription] = useState('');
-  const [dueAt, setDueAt] = useState('');
+  const [contactId, setContactId] = useState("");
+  const [title, setTitle] = useState("");
+  const [description, setDescription] = useState("");
+  const [dueAt, setDueAt] = useState("");
   const [isSubmitting, setIsSubmitting] = useState(false);
-  const [errorMessage, setErrorMessage] = useState('');
+  const [errorMessage, setErrorMessage] = useState("");
 
   // Fetch contacts each time the modal opens
   useEffect(() => {
@@ -52,13 +53,13 @@ function AddTaskModal({ isOpen, onClose, onSuccess }: AddTaskModalProps) {
           `${API_BASE_URL}/api/contacts?page=1&pageSize=100`,
           { signal: abortController.signal },
         );
-        if (!res.ok) throw new Error('Failed to load contacts');
+        if (!res.ok) throw new Error("Failed to load contacts");
         const data: { items: ContactOption[] } = await res.json();
         setContacts(data.items);
         // Pre-select the first contact for convenience
         if (data.items.length > 0) setContactId(data.items[0].id);
       } catch (err) {
-        if ((err as Error).name === 'AbortError') return;
+        if ((err as Error).name === "AbortError") return;
         // Non-fatal: the dropdown will be empty but the form is still usable
       } finally {
         setIsLoadingContacts(false);
@@ -70,11 +71,11 @@ function AddTaskModal({ isOpen, onClose, onSuccess }: AddTaskModalProps) {
   }, [isOpen]);
 
   function resetForm() {
-    setContactId('');
-    setTitle('');
-    setDescription('');
-    setDueAt('');
-    setErrorMessage('');
+    setContactId("");
+    setTitle("");
+    setDescription("");
+    setDueAt("");
+    setErrorMessage("");
   }
 
   function handleClose() {
@@ -84,34 +85,34 @@ function AddTaskModal({ isOpen, onClose, onSuccess }: AddTaskModalProps) {
 
   async function handleSubmit() {
     if (!contactId || !title || !description || !dueAt) {
-      setErrorMessage('All fields are required.');
+      setErrorMessage("All fields are required.");
       return;
     }
-    const todayStr = new Date().toLocaleDateString('en-CA');
+    const todayStr = getTodayTaskDateKey();
     if (dueAt < todayStr) {
-      setErrorMessage('Due date cannot be in the past.');
+      setErrorMessage("Due date cannot be in the past.");
       return;
     }
 
     setIsSubmitting(true);
-    setErrorMessage('');
+    setErrorMessage("");
 
     try {
       const res = await fetch(`${API_BASE_URL}/api/tasks`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ contactId, title, description, dueAt }),
       });
 
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
-        throw new Error(body.message || 'Failed to create task.');
+        throw new Error(body.message || "Failed to create task.");
       }
 
       resetForm();
       onSuccess();
     } catch (err) {
-      setErrorMessage((err as Error).message || 'Failed to create task.');
+      setErrorMessage((err as Error).message || "Failed to create task.");
     } finally {
       setIsSubmitting(false);
     }
@@ -186,7 +187,7 @@ function AddTaskModal({ isOpen, onClose, onSuccess }: AddTaskModalProps) {
             <Input
               id="add-task-due-at"
               type="date"
-              min={new Date().toLocaleDateString('en-CA')}
+              min={getTodayTaskDateKey()}
               value={dueAt}
               onChange={(e) => setDueAt(e.target.value)}
             />
@@ -205,7 +206,7 @@ function AddTaskModal({ isOpen, onClose, onSuccess }: AddTaskModalProps) {
             onClick={handleSubmit}
             disabled={isSubmitting || !isFormComplete}
           >
-            {isSubmitting ? 'Creating…' : 'Create Task'}
+            {isSubmitting ? "Creating…" : "Create Task"}
           </Button>
         </DialogFooter>
       </DialogContent>

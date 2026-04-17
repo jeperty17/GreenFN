@@ -627,3 +627,51 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-04-15 17:44:16 +0800
 - FILES_CHANGED: greenfn/src/lib/operationTracker.js, REVIEW/INTERNAL_VALIDATION_CONSOLE.md, LOG.md
 - CHANGE_SUMMARY: Updated internal validation tracking to skip read-only requests (GET and other non-write methods) so the operations feed highlights only Create/Update/Delete events; revalidated behavior locally by confirming GET calls are excluded, POST calls are captured, and operations feed entries are C/U/D only.
+
+### LOG-0073
+
+- TASK: Leads Pipeline
+- SUBTASK: Stage transition error recovery and backend error visibility
+- COMPLETED_AT: 2026-04-16 17:14:23 +0800
+- FILES_CHANGED: greenfn-web/src/pages/LeadsPipelinePage.tsx, greenfn/src/middleware/errorHandler.js, TASKS.md, REVIEW/README.md, REVIEW/LEADS_PIPELINE.md, LOG.md
+- CHANGE_SUMMARY: Fixed stage-transition failure handling by teaching the frontend to read nested API error payloads (`error.message` and `error.details`), added backend terminal logging for handled API errors, marked the Leads Pipeline frontend error-recovery checklist item complete, and documented reproduction/verification steps in a new review file.
+
+### LOG-0074
+
+- TASK: AI Interaction Summaries
+- SUBTASK: Auto-log saved AI summaries into Interaction History
+- COMPLETED_AT: 2026-04-17 14:06:25 +0800
+- FILES_CHANGED: greenfn/src/modules/ai/routes.js, greenfn-web/src/pages/AISummaryPage.tsx, REVIEW/AI_INTERACTION_SUMMARIES.md, LOG.md
+- CHANGE_SUMMARY: Updated AI summary persistence to always link to interaction history by auto-creating a `NOTE` interaction when no `interactionId` is supplied, while preserving existing explicit interaction linking behavior; extended response contract with `interactionId` and `interactionCreated`, and updated frontend save messaging/review docs to reflect linked interaction status.
+
+### LOG-0075
+
+- TASK: AI Interaction Summaries
+- SUBTASK: Expandable full-summary view and auto-create dated follow-up tasks
+- COMPLETED_AT: 2026-04-17 16:04:20 +0800
+- FILES_CHANGED: greenfn/src/modules/ai/service.js, greenfn/src/modules/ai/routes.js, greenfn-web/src/pages/InteractionHistoryPage.tsx, greenfn-web/src/pages/AISummaryPage.tsx, REVIEW/AI_INTERACTION_SUMMARIES.md, LOG.md
+- CHANGE_SUMMARY: Replaced generic auto-created interaction notes with AI-summary preview content, added expandable full AI summary display in Interaction History, implemented AI task extraction from generated summary text with due-date normalization to `YYYYMMDD` (including phrases like “next Monday”), and auto-created dated `NextStep` tasks returned in the summary response metadata.
+
+### LOG-0076
+
+- TASK: Leads Pipeline
+- SUBTASK: Complete transition guardrails, follow-up trigger emission, and audit history tracking
+- COMPLETED_AT: 2026-04-17 16:32:53 +0800
+- FILES_CHANGED: greenfn/src/modules/pipeline/routes.js, greenfn/prisma/schema.prisma, greenfn/prisma/migrations/20260417162000_pipeline_stage_transition_history/migration.sql, greenfn-web/src/pages/LeadsPipelinePage.tsx, TASKS.md, REVIEW/LEADS_PIPELINE.md, REVIEW/README.md, LOG.md
+- CHANGE_SUMMARY: Added backend valid-transition guardrails for default stage paths, emitted follow-up suggestion trigger payload on stage changes, persisted stage transitions into new `PipelineStageTransition` audit table, improved frontend nested error parsing for transition failures, updated Leads Pipeline task checklist statuses, and restored Leads Pipeline review documentation with reproducible validation commands.
+
+### LOG-0077
+
+- TASK: To-Do List (Today View)
+- SUBTASK: Add optional nudge prompt after pipeline stage movement
+- COMPLETED_AT: 2026-04-17 19:51:59 +0800
+- FILES_CHANGED: greenfn-web/src/pages/LeadsPipelinePage.tsx, TASKS.md, REVIEW/TASKS.md, REVIEW/README.md, LOG.md
+- CHANGE_SUMMARY: Surfaced pipeline follow-up suggestions as an optional prompt after stage changes, added one-click creation of the suggested task using normalized due-date metadata, marked the Today-view nudge prompt item complete, and documented the Today-view verification steps in REVIEW.
+
+### LOG-0078
+
+- TASK: To-Do List (Today View)
+- SUBTASK: Ensure timezone handling is consistent between frontend and backend
+- COMPLETED_AT: 2026-04-17 19:56:53 +0800
+- FILES_CHANGED: greenfn/src/modules/tasks/routes.js, greenfn/src/modules/tasks/timezone.js, greenfn-web/src/components/tasks/timezone.ts, greenfn-web/src/pages/TasksPage.tsx, greenfn-web/src/components/tasks/AddTaskModal.tsx, greenfn-web/src/components/tasks/TaskCard.tsx, greenfn-web/src/components/tasks/CalendarView.tsx, TASKS.md, REVIEW/TASKS.md, LOG.md
+- CHANGE_SUMMARY: Standardized Today/task date handling to Asia/Singapore on both backend and frontend, aligned bucket comparisons and calendar grouping to timezone-aware date keys, updated add-task date minimums and task card formatting, and documented the verification steps in REVIEW.

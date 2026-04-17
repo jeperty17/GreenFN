@@ -50,8 +50,14 @@ const DATABASE_URL = readRequiredEnv("DATABASE_URL");
 const DIRECT_URL = readRequiredEnv("DIRECT_URL");
 
 const AI_PROVIDER = readOptionalEnv("AI_PROVIDER", "google");
-const AI_PRIMARY_MODEL = readOptionalEnv("AI_PRIMARY_MODEL", "gemini-2.5-flash");
-const AI_FALLBACK_MODEL = readOptionalEnv("AI_FALLBACK_MODEL", "gemini-2.5-flash-lite");
+const AI_PRIMARY_MODEL = readOptionalEnv(
+  "AI_PRIMARY_MODEL",
+  "gemini-2.5-flash",
+);
+const AI_FALLBACK_MODEL = readOptionalEnv(
+  "AI_FALLBACK_MODEL",
+  "gemini-2.5-flash-lite",
+);
 const OPENAI_API_KEY = readOptionalEnv("OPENAI_API_KEY");
 const GEMINI_API_KEY = readOptionalEnv("GEMINI_API_KEY");
 const AI_TIMEOUT_MS = readOptionalInt("AI_TIMEOUT_MS", 12000);

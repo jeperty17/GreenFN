@@ -15,6 +15,11 @@ import { API_BASE_URL } from "../../config/env";
 import { Badge } from "../ui/badge";
 import { Button } from "../ui/button";
 import type { Task } from "./types";
+import {
+  formatTaskDate,
+  getTaskDateKey,
+  getTodayTaskDateKey,
+} from "./timezone";
 
 interface CalendarApiResponse {
   tasks: Task[];
@@ -24,18 +29,14 @@ interface CalendarApiResponse {
 
 /** Converts a Date to a YYYY-MM-DD string used as a grouping key */
 function toDateKey(date: Date): string {
-  return [
-    date.getFullYear(),
-    String(date.getMonth() + 1).padStart(2, "0"),
-    String(date.getDate()).padStart(2, "0"),
-  ].join("-");
+  return getTaskDateKey(date);
 }
 
 /** Groups tasks into a map keyed by YYYY-MM-DD */
 function groupByDate(tasks: Task[]): Record<string, Task[]> {
   const map: Record<string, Task[]> = {};
   for (const task of tasks) {
-    const key = task.dueAt.slice(0, 10);
+    const key = getTaskDateKey(task.dueAt);
     if (!map[key]) map[key] = [];
     map[key].push(task);
   }
@@ -44,13 +45,7 @@ function groupByDate(tasks: Task[]): Record<string, Task[]> {
 
 /** Formats a YYYY-MM-DD key as a human-readable date string */
 function formatDateKey(key: string): string {
-  const [y, m, d] = key.split("-").map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString("en-US", {
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-  });
+  return formatTaskDate(`${key}T00:00:00+08:00`);
 }
 
 /**
@@ -58,8 +53,8 @@ function formatDateKey(key: string): string {
  * Overdue = red, due today = amber, future = primary/blue.
  */
 function chipColorClass(dueAtIso: string): string {
-  const todayKey = toDateKey(new Date());
-  const taskKey = dueAtIso.slice(0, 10);
+  const todayKey = getTodayTaskDateKey();
+  const taskKey = getTaskDateKey(dueAtIso);
   if (taskKey < todayKey)
     return "bg-red-100 text-red-700 dark:bg-red-950/60 dark:text-red-400";
   if (taskKey === todayKey)
@@ -378,9 +373,13 @@ export default function CalendarView() {
       toast.error("Failed to reschedule task.");
       return;
     }
+    const payload = await res.json().catch(() => null);
+    const updatedTask: Task | null = payload?.task || null;
     // Update in local state — chip moves to the new date automatically
     setTasks((prev) =>
-      prev.map((t) => (t.id === taskId ? { ...t, dueAt: newDueAt } : t)),
+      prev.map((t) =>
+        t.id === taskId ? { ...t, dueAt: updatedTask?.dueAt || newDueAt } : t,
+      ),
     );
     toast.success("Task rescheduled.");
   }
@@ -415,13 +414,13 @@ export default function CalendarView() {
         <td
           {...tdProps}
           onClick={() =>
-            setSelectedDateKeyRef.current((prev) =>
-              prev === key ? null : key,
-            )
+            setSelectedDateKeyRef.current((prev) => (prev === key ? null : key))
           }
           className={[
             "border border-border/40 align-top cursor-pointer transition-colors",
-            isOutside ? "bg-muted/20 opacity-40 pointer-events-none" : "hover:bg-muted/30",
+            isOutside
+              ? "bg-muted/20 opacity-40 pointer-events-none"
+              : "hover:bg-muted/30",
             isSelected ? "ring-1 ring-inset ring-primary/60 bg-primary/5" : "",
           ]
             .filter(Boolean)

@@ -69,6 +69,18 @@ Built the structured post-interaction questionnaire form component as the first 
   - `AISummaryPage` now calls `POST /api/ai/summaries` during generation flow
   - Summary preview now uses backend-generated text and tracks persisted `summary.id`
   - Save action now confirms persisted summary ID instead of implying local-only persistence
+- ✅ Added automatic Interaction History logging for saved AI summaries:
+  - `POST /api/ai/summaries` now auto-creates a linked `Interaction` when `interactionId` is not provided
+  - Existing interaction linkage still works when `interactionId` is provided
+  - Response now returns `interactionId` and `interactionCreated` alongside `interactionLinked`
+- ✅ Improved Interaction History readability for AI summaries:
+  - Auto-created interaction notes now scaffold from actual AI summary content (preview snippet), not a generic placeholder
+  - Timeline entries now provide a `Show Full Summary` / `Hide Full Summary` toggle to inspect full AI summary text
+- ✅ Added automatic task extraction and creation from summary text:
+  - Backend now extracts explicit follow-up actions from generated AI summary text
+  - Due dates are normalized to `YYYYMMDD` before task creation
+  - Date hints such as `next Monday`, weekday names, `tomorrow`, and explicit date forms are parsed into concrete dates
+  - New tasks are persisted as `NextStep` records when a due date is inferable
 
 ## Reproducible Validation Commands
 
@@ -207,7 +219,7 @@ curl -X POST http://localhost:3000/api/ai/summaries \
 
 Expected: `200` with response object under `summary` containing `text`, `model`, `sourceMode`, `usage`, `generatedAt`.
 
-Expected persisted contract update: response `summary` now also includes `id` and `interactionLinked`.
+Expected persisted contract update: response `summary` now also includes `id`, `interactionLinked`, `interactionId`, `interactionCreated`, `tasksCreatedCount`, and `tasksCreated` (with `dueDateYmd` in `YYYYMMDD`).
 
 ### 4. Run Frontend Dev Server and Check Routes
 
