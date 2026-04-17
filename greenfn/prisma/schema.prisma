@@ -145,8 +145,8 @@ model NextStep {
   contact   Contact @relation(fields: [contactId], references: [id], onDelete: Cascade)
 
   title       String
-  description String
-  dueAt       DateTime?
+  description String?
+  dueAt       DateTime
   status      TaskStatus @default(OPEN)
 
   conversationId String?

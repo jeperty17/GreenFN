@@ -667,3 +667,11 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-04-16 22:47:17 +0800
 - FILES_CHANGED: greenfn-web/src/pages/ContactsHubPage.tsx, REVIEW/CONTACTS_HUB.md, LOG.md
 - CHANGE_SUMMARY: Added a `Delete` button under each contact row Actions cell with confirmation prompt, wired deletion to `DELETE /api/contacts/:contactId`, reset edit state when deleting the selected contact, and refreshed list state after success; validated with frontend build.
+
+### LOG-0078
+
+- TASK: Prisma Schema Maintenance
+- SUBTASK: Make NextStep description optional and dueAt required
+- COMPLETED_AT: 2026-04-17 10:57:16 +0800
+- FILES_CHANGED: greenfn/prisma/schema.prisma, greenfn/prisma/migrations/20260417025706_nextstep_description_optional_due_required/migration.sql, LOG.md
+- CHANGE_SUMMARY: Updated `NextStep` schema to `description String?` and `dueAt DateTime`, validated schema, backfilled existing null `dueAt` rows to unblock required constraint migration, generated and applied migration `20260417025706_nextstep_description_optional_due_required`, and confirmed migration status is up to date.
