@@ -14,6 +14,7 @@ model User {
   contacts  Contact[]
   interactions Interaction[]
   stageTransitions PipelineStageTransition[]
+  taskActivityLogs TaskActivityLog[]
   stages    PipelineStage[]
   tags      Tag[]
   templates MessageTemplate[]
@@ -53,6 +54,7 @@ model Contact {
   stageTransitions PipelineStageTransition[]
   aiSummaries   AiSummary[]
   nextSteps     NextStep[]
+  taskActivityLogs TaskActivityLog[]
   conversations Conversation[]
   policies      Policy[]
   goals         Goal[]
@@ -184,9 +186,41 @@ model NextStep {
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
+  taskActivityLogs TaskActivityLog[]
+
   @@index([contactId])
   @@index([status, dueAt])
   @@index([conversationId])
+}
+
+model TaskActivityLog {
+  id String @id @default(cuid())
+
+  taskId String?
+  task   NextStep? @relation(fields: [taskId], references: [id], onDelete: SetNull)
+
+  contactId String?
+  contact   Contact? @relation(fields: [contactId], references: [id], onDelete: SetNull)
+
+  advisorId String?
+  advisor   User? @relation(fields: [advisorId], references: [id], onDelete: SetNull)
+
+  activityType TaskActivityType
+
+  taskTitleSnapshot String
+  contactNameSnapshot String
+  dueAtSnapshot DateTime?
+  statusSnapshot TaskStatus
+  detail String?
+  metadata Json?
+  scheduledFor DateTime?
+
+  createdAt DateTime @default(now())
+
+  @@index([taskId, createdAt])
+  @@index([contactId, createdAt])
+  @@index([advisorId, createdAt])
+  @@index([activityType, scheduledFor])
 }
 
 model Conversation {
@@ -343,6 +377,15 @@ enum TaskStatus {
   OPEN
   DONE
   CANCELED
+}
+
+enum TaskActivityType {
+  CREATED
+  UPDATED
+  COMPLETED
+  CANCELED
+  DELETED
+  REMINDER_TRIGGERED
 }
 
 enum MessagingChannel {

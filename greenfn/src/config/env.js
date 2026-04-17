@@ -82,6 +82,9 @@ const AI_RATE_LIMIT_MAX_REQUESTS = readOptionalInt(
   "AI_RATE_LIMIT_MAX_REQUESTS",
   20,
 );
+const TASK_REMINDER_ALERT_WEBHOOK_URL = readOptionalEnv(
+  "TASK_REMINDER_ALERT_WEBHOOK_URL",
+);
 const CORS_ALLOWED_ORIGINS_RAW = readOptionalEnv(
   "CORS_ALLOWED_ORIGINS",
   "http://localhost:5173,https://greenfn-web.vercel.app",
@@ -125,6 +128,7 @@ module.exports = {
   AI_TIMEOUT_MS,
   AI_RATE_LIMIT_WINDOW_MS,
   AI_RATE_LIMIT_MAX_REQUESTS,
+  TASK_REMINDER_ALERT_WEBHOOK_URL,
   CORS_ALLOWED_ORIGINS,
   requireOpenAIApiKey,
   requireGeminiApiKey,

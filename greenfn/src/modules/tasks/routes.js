@@ -2,6 +2,7 @@ const express = require("express");
 const prisma = require("../../lib/prisma");
 const { httpError } = require("../../utils/httpError");
 const { validateBody, requiredString } = require("../../middleware/validate");
+const { recordTaskActivity, TASK_ACTIVITY_TYPES } = require("./activity");
 const {
   getDateKeyInTimeZone,
   getSingaporeTodayDateKey,
@@ -139,7 +140,7 @@ router.post(
 
       const contact = await prisma.contact.findUnique({
         where: { id: contactId },
-        select: { advisorId: true },
+        select: { advisorId: true, fullName: true },
       });
       if (!contact) {
         throw httpError(404, "Contact not found");
@@ -148,15 +149,29 @@ router.post(
         throw httpError(403, "Forbidden");
       }
 
-      // create task with status OPEN
-      const task = await prisma.nextStep.create({
-        data: {
-          contactId,
-          title,
-          description,
-          dueAt: parsedDueAt,
-          status: "OPEN",
-        },
+      const task = await prisma.$transaction(async (tx) => {
+        const createdTask = await tx.nextStep.create({
+          data: {
+            contactId,
+            title,
+            description,
+            dueAt: parsedDueAt,
+            status: "OPEN",
+          },
+        });
+
+        await recordTaskActivity(tx, {
+          task: createdTask,
+          contact,
+          advisorId,
+          activityType: TASK_ACTIVITY_TYPES.CREATED,
+          detail: `Created task for ${contact.fullName || "Unknown Contact"}.`,
+          metadata: {
+            source: "api",
+          },
+        });
+
+        return createdTask;
       });
 
       res.status(201).json({ task });
@@ -220,7 +235,14 @@ router.patch(
 
       const existingTask = await prisma.nextStep.findUnique({
         where: { id: taskId },
-        select: { id: true, contactId: true },
+        select: {
+          id: true,
+          contactId: true,
+          title: true,
+          description: true,
+          dueAt: true,
+          status: true,
+        },
       });
 
       if (!existingTask) {
@@ -229,16 +251,60 @@ router.patch(
 
       const contact = await prisma.contact.findUnique({
         where: { id: existingTask.contactId },
-        select: { advisorId: true },
+        select: { advisorId: true, fullName: true },
       });
 
       if (!contact || contact.advisorId !== advisorId) {
         throw httpError(403, "Forbidden");
       }
 
-      const task = await prisma.nextStep.update({
-        where: { id: taskId },
-        data,
+      const task = await prisma.$transaction(async (tx) => {
+        const updatedTask = await tx.nextStep.update({
+          where: { id: taskId },
+          data,
+        });
+
+        const changedFields = [];
+        if (status !== undefined && status !== existingTask.status) {
+          changedFields.push(`status to ${status}`);
+        }
+        if (
+          dueAt !== undefined &&
+          parsedDueAt?.getTime() !== existingTask.dueAt?.getTime()
+        ) {
+          changedFields.push("due date");
+        }
+        if (title !== undefined && title !== existingTask.title) {
+          changedFields.push("title");
+        }
+        if (
+          description !== undefined &&
+          description !== existingTask.description
+        ) {
+          changedFields.push("description");
+        }
+
+        if (changedFields.length > 0) {
+          const activityType =
+            status === "DONE"
+              ? TASK_ACTIVITY_TYPES.COMPLETED
+              : status === "CANCELED"
+                ? TASK_ACTIVITY_TYPES.CANCELED
+                : TASK_ACTIVITY_TYPES.UPDATED;
+
+          await recordTaskActivity(tx, {
+            task: updatedTask,
+            contact,
+            advisorId,
+            activityType,
+            detail: `Updated ${changedFields.join(", ")}.`,
+            metadata: {
+              changedFields,
+            },
+          });
+        }
+
+        return updatedTask;
       });
 
       res.json({ task });
@@ -257,7 +323,14 @@ router.delete("/:taskId", async (req, res, next) => {
 
     const task = await prisma.nextStep.findUnique({
       where: { id: taskId },
-      select: { id: true, contactId: true },
+      select: {
+        id: true,
+        contactId: true,
+        title: true,
+        description: true,
+        dueAt: true,
+        status: true,
+      },
     });
 
     if (!task) {
@@ -266,14 +339,27 @@ router.delete("/:taskId", async (req, res, next) => {
 
     const contact = await prisma.contact.findUnique({
       where: { id: task.contactId },
-      select: { advisorId: true },
+      select: { advisorId: true, fullName: true },
     });
 
     if (!contact || contact.advisorId !== advisorId) {
       throw httpError(403, "Forbidden");
     }
 
-    await prisma.nextStep.delete({ where: { id: taskId } });
+    await prisma.$transaction(async (tx) => {
+      await recordTaskActivity(tx, {
+        task,
+        contact,
+        advisorId,
+        activityType: TASK_ACTIVITY_TYPES.DELETED,
+        detail: `Deleted task ${task.title}.`,
+        metadata: {
+          source: "api",
+        },
+      });
+
+      await tx.nextStep.delete({ where: { id: taskId } });
+    });
 
     res.status(204).send();
   } catch (error) {

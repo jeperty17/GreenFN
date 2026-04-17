@@ -15,8 +15,18 @@ function getSingaporeTodayDateKey(now = new Date()) {
   return getDateKeyInTimeZone(now);
 }
 
+function getSingaporeDayBounds(now = new Date()) {
+  const dayKey = getSingaporeTodayDateKey(now);
+  const start = new Date(`${dayKey}T00:00:00+08:00`);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 1);
+
+  return { start, end };
+}
+
 module.exports = {
   TIME_ZONE,
   getDateKeyInTimeZone,
   getSingaporeTodayDateKey,
+  getSingaporeDayBounds,
 };

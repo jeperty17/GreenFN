@@ -731,3 +731,27 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-04-18 00:52:45 +0800
 - FILES_CHANGED: greenfn/src/modules/tasks/routes.js, LOG.md
 - CHANGE_SUMMARY: Removed invalid `dueAt: { not: null }` predicate from `GET /api/tasks` (Prisma validation error on required `DateTime`), added defensive filtering to exclude legacy tasks with malformed/null due dates from list/calendar responses, and verified endpoint now returns HTTP 200 for authenticated requests.
+
+### LOG-0087
+
+- TASK: To-Do List (Today View)
+- SUBTASK: Record implemented Calendar tab and widened Today-view scope in TASKS.md
+- COMPLETED_AT: 2026-04-18 01:10:45 +0800
+- FILES_CHANGED: TASKS.md, REVIEW/TASKS.md, LOG.md
+- CHANGE_SUMMARY: Updated the Today-view checklist to explicitly record the existing Calendar tab/monthly OPEN-task view and backend calendar query mode, widened the Today-view wording to include upcoming next steps, and aligned the Today-view review note with the implemented task-calendar behavior.
+
+### LOG-0088
+
+- TASK: To-Do List (Today View)
+- SUBTASK: Implement remaining reminder, audit, worker, and alerting tasks
+- COMPLETED_AT: 2026-04-18 01:41:08 +0800
+- FILES_CHANGED: greenfn/prisma/schema.prisma, greenfn/prisma/migrations/20260418011045_task_activity_logs_and_reminders/migration.sql, greenfn/src/config/env.js, greenfn/src/modules/tasks/routes.js, greenfn/src/modules/tasks/timezone.js, greenfn/src/modules/tasks/activity.js, greenfn/src/modules/tasks/reminders.js, greenfn/src/modules/tasks/alerts.js, greenfn/src/workers/taskReminderWorker.js, greenfn/package.json, TASKS.md, REVIEW/TASKS.md, LOG.md
+- CHANGE_SUMMARY: Added task activity audit logging for create/update/complete/delete events, introduced a daily reminder scan service and standalone worker that logs overdue/today reminders, wired failure alert delivery through an optional webhook, added the matching Prisma enum/model/migration, backfilled the legacy null due-date row so migrations could apply cleanly, and marked the Today-view checklist complete.
+
+### LOG-0089
+
+- TASK: To-Do List (Today View)
+- SUBTASK: Document reminder alert webhook env example
+- COMPLETED_AT: 2026-04-18 01:42:21 +0800
+- FILES_CHANGED: greenfn/.env.example, LOG.md
+- CHANGE_SUMMARY: Added `TASK_REMINDER_ALERT_WEBHOOK_URL` to the backend example env file so the scheduled task reminder worker's optional failure-alert webhook is documented alongside the other backend-only settings.

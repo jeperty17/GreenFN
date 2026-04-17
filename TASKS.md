@@ -119,7 +119,8 @@
 
 ### FRONTEND
 
-- [x] Build Today view showing due-today and overdue next steps.
+- [x] Build Today view showing overdue, due-today, and upcoming next steps.
+- [x] Build Calendar tab for monthly OPEN-task viewing with day chips and a task detail panel.
 - [x] Build task creation/edit UI for per-contact next step text and due date.
 - [x] Add quick actions for complete, snooze, and reschedule.
 - [x] Add optional nudge prompt after pipeline stage movement.
@@ -128,21 +129,22 @@
 
 - [x] Implement CRUD endpoints for next-step tasks.
 - [x] Implement endpoint for Today feed with overdue and due-today grouping.
+- [x] Implement calendar query mode for all OPEN tasks.
 - [x] Implement business logic for task state (open/completed/snoozed).
-- [ ] Implement reminder/nudge scheduler trigger logic.
+- [x] Implement reminder/nudge scheduler trigger logic.
 
 ### DB
 
 - [x] Create tasks table linked to contacts and user.
 - [x] Add due-date, status, completed-at fields.
 - [x] Add indexes for due-date and status queries.
-- [ ] Add task activity log table for audit trail.
+- [x] Add task activity log table for audit trail.
 
 ### DEPLOYMENT
 
-- [ ] Configure scheduled job/worker for reminders and daily task checks.
+- [x] Configure scheduled job/worker for reminders and daily task checks.
 - [x] Ensure timezone handling is consistent between frontend and backend.
-- [ ] Add alerting for failed scheduled jobs.
+- [x] Add alerting for failed scheduled jobs.
 
 ## Interaction History
 
