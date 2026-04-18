@@ -1,56 +1,34 @@
+/*
+ * InteractionHistoryPage fetches contact-scoped interaction data, manages
+ * filters/form state, and composes reusable interaction UI components.
+ */
 import { type FormEvent, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+import { MessageSquarePlus } from "lucide-react";
+import { toast } from "sonner";
 import { API_BASE_URL } from "../config/env";
-import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import {
-  Card,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle,
-} from "../components/ui/card";
-import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
-import { Textarea } from "../components/ui/textarea";
-
-type ContactType = "LEAD" | "CLIENT";
-
-type ContactItem = {
-  id: string;
-  fullName: string;
-  type: ContactType;
-  source: string | null;
-};
+  InteractionDetailsModal,
+  InteractionOverviewCard,
+  InteractionTimelineCard,
+  LogInteractionModal,
+} from "../components/interactions";
+import type {
+  ContactItem,
+  InteractionFormState,
+  InteractionLog,
+  InteractionType,
+} from "../components/interactions/types";
 
 type ContactsResponse = {
   items: ContactItem[];
-};
-
-type InteractionType = "CALL" | "MEETING" | "WHATSAPP_DM" | "GENERAL_NOTE";
-
-type InteractionLog = {
-  id: string;
-  contactId: string;
-  type: InteractionType;
-  interactionDate: string;
-  notes: string;
-  aiSummaryLink: {
-    summaryText: string | null;
-    model: string | null;
-    sourceMode: string | null;
-    generatedAt: string | null;
-  } | null;
-  relatedTask: {
-    id: string;
-    title: string;
-  } | null;
 };
 
 type InteractionApiItem = {
   id: string;
   contactId: string;
   type: string;
+  title?: string | null;
   occurredAt: string;
   notes: string | null;
   aiSummaryLink?: {
@@ -63,19 +41,6 @@ type InteractionApiItem = {
 
 type InteractionsResponse = {
   items: InteractionApiItem[];
-};
-
-type InteractionFormState = {
-  type: InteractionType;
-  interactionDate: string;
-  notes: string;
-};
-
-const typeLabelMap: Record<InteractionType, string> = {
-  CALL: "Call",
-  MEETING: "Meeting",
-  WHATSAPP_DM: "WhatsApp/DM",
-  GENERAL_NOTE: "General Note",
 };
 
 function normalizeInteractionType(type: string): InteractionType {
@@ -105,6 +70,7 @@ function mapInteractionFromApi(item: InteractionApiItem): InteractionLog {
     id: item.id,
     contactId: item.contactId,
     type: normalizeInteractionType(item.type),
+    title: item.title || null,
     interactionDate: item.occurredAt,
     notes: item.notes || "",
     aiSummaryLink: item.aiSummaryLink
@@ -128,7 +94,12 @@ function currentDateTimeLocal() {
 const EMPTY_INTERACTION_FORM: InteractionFormState = {
   type: "CALL",
   interactionDate: currentDateTimeLocal(),
+  title: "",
   notes: "",
+  aiSummaryDraft: "",
+  aiSummaryModel: null,
+  aiSummarySourceMode: null,
+  aiSummaryGeneratedAt: null,
 };
 
 function formatDateTime(dateString: string) {
@@ -138,15 +109,23 @@ function formatDateTime(dateString: string) {
   }).format(new Date(dateString));
 }
 
-function summarizeText(value: string, maxChars = 280) {
-  const normalized = String(value || "")
-    .replace(/\s+/g, " ")
-    .trim();
-  if (normalized.length <= maxChars) {
-    return normalized;
-  }
+function formatMonthLabel(dateString: string) {
+  return new Intl.DateTimeFormat("en-SG", {
+    month: "short",
+    year: "numeric",
+  })
+    .format(new Date(dateString))
+    .toUpperCase();
+}
 
-  return `${normalized.slice(0, maxChars - 1)}...`;
+function formatLastActivity(dateString: string) {
+  const timestamp = new Date(dateString).getTime();
+  if (Number.isNaN(timestamp)) return "—";
+
+  const days = Math.floor((Date.now() - timestamp) / (1000 * 60 * 60 * 24));
+  if (days <= 0) return "Today";
+  if (days === 1) return "1 day ago";
+  return `${days} days ago`;
 }
 
 function InteractionHistoryPage() {
@@ -163,12 +142,13 @@ function InteractionHistoryPage() {
   );
   const [formError, setFormError] = useState("");
   const [formSuccess, setFormSuccess] = useState("");
+  const [isLogInteractionModalOpen, setIsLogInteractionModalOpen] =
+    useState(false);
+  const [selectedInteractionId, setSelectedInteractionId] = useState("");
   const [typeFilter, setTypeFilter] = useState<"ALL" | InteractionType>("ALL");
   const [startDateFilter, setStartDateFilter] = useState("");
   const [endDateFilter, setEndDateFilter] = useState("");
-  const [expandedSummaryIds, setExpandedSummaryIds] = useState<Set<string>>(
-    new Set(),
-  );
+  const [notesSearchFilter, setNotesSearchFilter] = useState("");
 
   useEffect(() => {
     const abortController = new AbortController();
@@ -238,7 +218,6 @@ function InteractionHistoryPage() {
 
         const payload: InteractionsResponse = await response.json();
         setInteractionLogs((payload.items || []).map(mapInteractionFromApi));
-        setExpandedSummaryIds(new Set());
       } catch (error) {
         if ((error as Error).name === "AbortError") {
           return;
@@ -299,26 +278,110 @@ function InteractionHistoryPage() {
         return false;
       }
 
+      if (notesSearchFilter.trim()) {
+        const query = notesSearchFilter.toLowerCase();
+        if (!entry.notes.toLowerCase().includes(query)) {
+          return false;
+        }
+      }
+
       return true;
     });
-  }, [endDateFilter, startDateFilter, timelineItems, typeFilter]);
+  }, [
+    endDateFilter,
+    notesSearchFilter,
+    startDateFilter,
+    timelineItems,
+    typeFilter,
+  ]);
+
+  const timelineStats = useMemo(() => {
+    const total = filteredTimelineItems.length;
+    const calls = filteredTimelineItems.filter(
+      (entry) => entry.type === "CALL",
+    ).length;
+    const meetings = filteredTimelineItems.filter(
+      (entry) => entry.type === "MEETING",
+    ).length;
+    const chats = filteredTimelineItems.filter(
+      (entry) => entry.type === "WHATSAPP_DM",
+    ).length;
+    const notes = filteredTimelineItems.filter(
+      (entry) => entry.type === "GENERAL_NOTE",
+    ).length;
+    const lastActivity = filteredTimelineItems[0]?.interactionDate || null;
+
+    return {
+      total,
+      calls,
+      meetings,
+      chats,
+      notes,
+      lastActivity,
+    };
+  }, [filteredTimelineItems]);
+
+  const typePills = useMemo(
+    () => [
+      {
+        key: "ALL" as const,
+        label: "All",
+        count: timelineItems.length,
+      },
+      {
+        key: "CALL" as const,
+        label: "Calls",
+        count: timelineItems.filter((entry) => entry.type === "CALL").length,
+      },
+      {
+        key: "MEETING" as const,
+        label: "Meetings",
+        count: timelineItems.filter((entry) => entry.type === "MEETING").length,
+      },
+      {
+        key: "WHATSAPP_DM" as const,
+        label: "WhatsApp",
+        count: timelineItems.filter((entry) => entry.type === "WHATSAPP_DM")
+          .length,
+      },
+      {
+        key: "GENERAL_NOTE" as const,
+        label: "Notes",
+        count: timelineItems.filter((entry) => entry.type === "GENERAL_NOTE")
+          .length,
+      },
+    ],
+    [timelineItems],
+  );
+
+  const timelineGroups = useMemo(() => {
+    const grouped = new Map<string, InteractionLog[]>();
+
+    for (const entry of filteredTimelineItems) {
+      const key = formatMonthLabel(entry.interactionDate);
+      if (!grouped.has(key)) {
+        grouped.set(key, []);
+      }
+      grouped.get(key)?.push(entry);
+    }
+
+    return Array.from(grouped.entries()).map(([month, items]) => ({
+      month,
+      items,
+    }));
+  }, [filteredTimelineItems]);
+
+  const selectedInteraction = useMemo(
+    () =>
+      timelineItems.find((entry) => entry.id === selectedInteractionId) || null,
+    [selectedInteractionId, timelineItems],
+  );
 
   function handleResetFilters() {
     setTypeFilter("ALL");
     setStartDateFilter("");
     setEndDateFilter("");
-  }
-
-  function toggleSummaryExpansion(interactionId: string) {
-    setExpandedSummaryIds((currentState) => {
-      const next = new Set(currentState);
-      if (next.has(interactionId)) {
-        next.delete(interactionId);
-      } else {
-        next.add(interactionId);
-      }
-      return next;
-    });
+    setNotesSearchFilter("");
   }
 
   async function handleSubmitInteraction(event: FormEvent<HTMLFormElement>) {
@@ -327,17 +390,22 @@ function InteractionHistoryPage() {
     setFormSuccess("");
 
     if (!selectedContactId) {
-      setFormError("Please select a contact first.");
+      setFormError("Please select a contact first");
       return;
     }
 
     if (!formState.interactionDate) {
-      setFormError("Interaction date is required.");
+      setFormError("Interaction date is required");
+      return;
+    }
+
+    if (!formState.title.trim()) {
+      setFormError("Interaction title is required");
       return;
     }
 
     if (!formState.notes.trim()) {
-      setFormError("Notes are required.");
+      setFormError("Notes are required");
       return;
     }
 
@@ -353,6 +421,7 @@ function InteractionHistoryPage() {
           contactId: selectedContactId,
           type: formState.type,
           occurredAt: new Date(formState.interactionDate).toISOString(),
+          title: formState.title.trim(),
           notes: formState.notes.trim(),
         }),
       });
@@ -366,7 +435,43 @@ function InteractionHistoryPage() {
       }
 
       const payload = await response.json();
-      const created = mapInteractionFromApi(payload.item as InteractionApiItem);
+      let created = mapInteractionFromApi(payload.item as InteractionApiItem);
+
+      if (formState.aiSummaryDraft.trim()) {
+        const linkResponse = await fetch(
+          `${API_BASE_URL}/api/interactions/${encodeURIComponent(created.id)}/summary-link`,
+          {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              summaryText: formState.aiSummaryDraft.trim(),
+              model: formState.aiSummaryModel,
+              sourceMode: formState.aiSummarySourceMode || "notes",
+              generatedAt:
+                formState.aiSummaryGeneratedAt || new Date().toISOString(),
+            }),
+          },
+        );
+
+        if (!linkResponse.ok) {
+          const linkErrorPayload = await linkResponse.json().catch(() => null);
+          const linkErrorMessage =
+            linkErrorPayload?.error?.message ||
+            `Summary link failed (${linkResponse.status})`;
+          throw new Error(linkErrorMessage);
+        }
+
+        const linkedPayload = await linkResponse.json();
+        created = mapInteractionFromApi(
+          linkedPayload.item as InteractionApiItem,
+        );
+
+        toast.success("Interaction saved and AI summary linked");
+      } else {
+        toast.success("Interaction saved successfully");
+      }
 
       setInteractionLogs((currentLogs) => [created, ...currentLogs]);
       setFormState({
@@ -374,294 +479,98 @@ function InteractionHistoryPage() {
         type: formState.type,
         interactionDate: currentDateTimeLocal(),
       });
-      setFormSuccess("Interaction saved to database.");
+      setFormSuccess("Interaction saved to database");
+      setIsLogInteractionModalOpen(false);
     } catch (error) {
-      setFormError((error as Error).message || "Failed to save interaction.");
+      setFormError((error as Error).message || "Failed to save interaction");
     } finally {
       setIsSavingInteraction(false);
     }
   }
 
   return (
-    <section className="page-shell space-y-6">
-      <header className="space-y-2">
-        <h2>Interaction History</h2>
-        <p className="text-sm text-muted-foreground">
-          Per-contact chronological timeline for calls, meetings, chat updates,
-          and notes.
-        </p>
+    <section className="page-shell space-y-7">
+      <header className="flex items-center justify-between gap-3">
+        <div className="flex items-center gap-3">
+          <h1>Interaction History</h1>
+        </div>
+        <Button
+          type="button"
+          className="flex items-center gap-1.5"
+          onClick={() => {
+            setFormError("");
+            setFormSuccess("");
+            setIsLogInteractionModalOpen(true);
+          }}
+          disabled={!selectedContactId || isLoadingContacts}
+        >
+          <MessageSquarePlus className="h-4 w-4" />
+          Log interaction
+        </Button>
       </header>
 
-      <Card>
-        <CardHeader className="pb-4">
-          <CardTitle className="text-base">Select Contact</CardTitle>
-          <CardDescription>
-            Choose a contact to view a timeline of interaction logs.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-3">
-          <select
-            className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-            disabled={isLoadingContacts || contacts.length === 0}
-            value={selectedContactId}
-            onChange={(event) => setSelectedContactId(event.target.value)}
-          >
-            {contacts.length === 0 && (
-              <option value="">No contacts found</option>
-            )}
-            {contacts.map((contact) => (
-              <option key={contact.id} value={contact.id}>
-                {contact.fullName} ({contact.type})
-              </option>
-            ))}
-          </select>
+      {formSuccess && (
+        <p className="rounded-lg border border-[oklch(0.86_0.03_145)] bg-[oklch(0.96_0.03_145)] px-3 py-2.5 text-base font-medium leading-6 text-[oklch(0.33_0.1_145)]">
+          {formSuccess}
+        </p>
+      )}
 
-          {contactsError && (
-            <p className="text-sm text-destructive">Error: {contactsError}</p>
-          )}
+      <InteractionOverviewCard
+        contacts={contacts}
+        selectedContactId={selectedContactId}
+        isLoadingContacts={isLoadingContacts}
+        contactsError={contactsError}
+        selectedContact={selectedContact}
+        timelineStats={timelineStats}
+        onSelectContact={setSelectedContactId}
+        formatLastActivity={formatLastActivity}
+      />
 
-          {!contactsError && selectedContact && (
-            <p className="text-sm text-muted-foreground">
-              Viewing timeline for{" "}
-              <span className="font-medium">{selectedContact.fullName}</span>
-              {selectedContact.source ? ` (${selectedContact.source})` : ""}.
-            </p>
-          )}
-        </CardContent>
-      </Card>
+      <InteractionTimelineCard
+        interactionsError={interactionsError}
+        isLoadingInteractions={isLoadingInteractions}
+        filteredTimelineItemsCount={filteredTimelineItems.length}
+        typePills={typePills}
+        typeFilter={typeFilter}
+        startDateFilter={startDateFilter}
+        endDateFilter={endDateFilter}
+        notesSearchFilter={notesSearchFilter}
+        timelineGroups={timelineGroups}
+        onSetTypeFilter={setTypeFilter}
+        onSetStartDateFilter={setStartDateFilter}
+        onSetEndDateFilter={setEndDateFilter}
+        onSetNotesSearchFilter={setNotesSearchFilter}
+        onResetFilters={handleResetFilters}
+        formatDateTime={formatDateTime}
+        onOpenInteraction={(interactionId) => {
+          setSelectedInteractionId(interactionId);
+        }}
+      />
 
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Add Interaction Entry</CardTitle>
-          <CardDescription>
-            Capture interaction type, date, and notes for the selected contact.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <form className="space-y-4" onSubmit={handleSubmitInteraction}>
-            <div className="form-grid">
-              <div className="field-stack">
-                <Label htmlFor="interactionType">Interaction Type</Label>
-                <select
-                  id="interactionType"
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                  value={formState.type}
-                  onChange={(event) =>
-                    setFormState((currentState) => ({
-                      ...currentState,
-                      type: event.target.value as InteractionType,
-                    }))
-                  }
-                >
-                  <option value="CALL">Call</option>
-                  <option value="MEETING">Meeting</option>
-                  <option value="WHATSAPP_DM">WhatsApp/DM</option>
-                  <option value="GENERAL_NOTE">General Note</option>
-                </select>
-              </div>
+      <LogInteractionModal
+        isOpen={isLogInteractionModalOpen}
+        isSavingInteraction={isSavingInteraction}
+        isLoadingContacts={isLoadingContacts}
+        selectedContactId={selectedContactId}
+        selectedContactName={selectedContact?.fullName || "this contact"}
+        formState={formState}
+        formError={formError}
+        onClose={() => {
+          if (!isSavingInteraction) {
+            setIsLogInteractionModalOpen(false);
+          }
+        }}
+        onSubmit={handleSubmitInteraction}
+        onSetFormState={setFormState}
+      />
 
-              <div className="field-stack">
-                <Label htmlFor="interactionDate">Interaction Date</Label>
-                <input
-                  id="interactionDate"
-                  className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                  type="datetime-local"
-                  value={formState.interactionDate}
-                  onChange={(event) =>
-                    setFormState((currentState) => ({
-                      ...currentState,
-                      interactionDate: event.target.value,
-                    }))
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="field-stack">
-              <Label htmlFor="interactionNotes">Notes</Label>
-              <Textarea
-                id="interactionNotes"
-                placeholder="What happened, what was discussed, and what should happen next?"
-                value={formState.notes}
-                onChange={(event) =>
-                  setFormState((currentState) => ({
-                    ...currentState,
-                    notes: event.target.value,
-                  }))
-                }
-              />
-            </div>
-
-            {formError && (
-              <p className="text-sm text-destructive">{formError}</p>
-            )}
-            {formSuccess && (
-              <p className="text-sm text-emerald-700">{formSuccess}</p>
-            )}
-
-            <Button
-              type="submit"
-              disabled={
-                isLoadingContacts || isSavingInteraction || !selectedContactId
-              }
-            >
-              Add Interaction
-            </Button>
-          </form>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Chronological Timeline</CardTitle>
-          <CardDescription>
-            Latest interactions are shown first for quick pre-call recall.
-          </CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="form-grid">
-            <div className="field-stack">
-              <Label htmlFor="timelineTypeFilter">Type Filter</Label>
-              <select
-                id="timelineTypeFilter"
-                className="w-full rounded-md border bg-background px-3 py-2 text-sm"
-                value={typeFilter}
-                onChange={(event) =>
-                  setTypeFilter(event.target.value as "ALL" | InteractionType)
-                }
-              >
-                <option value="ALL">All types</option>
-                <option value="CALL">Call</option>
-                <option value="MEETING">Meeting</option>
-                <option value="WHATSAPP_DM">WhatsApp/DM</option>
-                <option value="GENERAL_NOTE">General Note</option>
-              </select>
-            </div>
-
-            <div className="field-stack">
-              <Label htmlFor="timelineStartDate">Start Date</Label>
-              <Input
-                id="timelineStartDate"
-                type="date"
-                value={startDateFilter}
-                onChange={(event) => setStartDateFilter(event.target.value)}
-              />
-            </div>
-
-            <div className="field-stack">
-              <Label htmlFor="timelineEndDate">End Date</Label>
-              <Input
-                id="timelineEndDate"
-                type="date"
-                value={endDateFilter}
-                onChange={(event) => setEndDateFilter(event.target.value)}
-              />
-            </div>
-          </div>
-
-          <div>
-            <Button
-              type="button"
-              variant="outline"
-              onClick={handleResetFilters}
-            >
-              Reset Filters
-            </Button>
-          </div>
-
-          {interactionsError && (
-            <p className="text-sm text-destructive">
-              Error: {interactionsError}
-            </p>
-          )}
-
-          {!interactionsError && isLoadingInteractions ? (
-            <p className="text-sm text-muted-foreground">
-              Loading interactions...
-            </p>
-          ) : filteredTimelineItems.length === 0 ? (
-            <p className="text-sm text-muted-foreground">
-              No interaction logs match the selected filters.
-            </p>
-          ) : (
-            <ul className="relative ml-3 border-l border-border pl-6">
-              {filteredTimelineItems.map((entry) => (
-                <li key={entry.id} className="relative pb-6 last:pb-0">
-                  <span className="absolute -left-[31px] top-1.5 h-3 w-3 rounded-full border border-primary bg-background" />
-                  <div className="space-y-2">
-                    <div className="flex flex-wrap items-center gap-2">
-                      <Badge variant="secondary">
-                        {typeLabelMap[entry.type]}
-                      </Badge>
-                      <p className="text-sm text-muted-foreground">
-                        {formatDateTime(entry.interactionDate)}
-                      </p>
-                    </div>
-                    <p className="text-sm leading-6">{entry.notes}</p>
-                    {entry.aiSummaryLink?.summaryText && (
-                      <div className="rounded-md border border-border bg-muted/30 p-3">
-                        <div className="mb-2 flex flex-wrap items-center gap-2">
-                          <Badge variant="outline">AI Summary</Badge>
-                          {entry.aiSummaryLink.sourceMode && (
-                            <Badge variant="secondary">
-                              Mode: {entry.aiSummaryLink.sourceMode}
-                            </Badge>
-                          )}
-                          {entry.aiSummaryLink.model && (
-                            <Badge variant="outline">
-                              Model: {entry.aiSummaryLink.model}
-                            </Badge>
-                          )}
-                        </div>
-
-                        {expandedSummaryIds.has(entry.id) ? (
-                          <div className="space-y-2">
-                            <p className="whitespace-pre-wrap text-sm leading-6">
-                              {entry.aiSummaryLink.summaryText}
-                            </p>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => toggleSummaryExpansion(entry.id)}
-                            >
-                              Hide Full Summary
-                            </Button>
-                          </div>
-                        ) : (
-                          <div className="space-y-2">
-                            <p className="whitespace-pre-wrap text-sm leading-6">
-                              {summarizeText(entry.aiSummaryLink.summaryText)}
-                            </p>
-                            <Button
-                              type="button"
-                              variant="outline"
-                              size="sm"
-                              onClick={() => toggleSummaryExpansion(entry.id)}
-                            >
-                              Show Full Summary
-                            </Button>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                    {entry.relatedTask && (
-                      <p className="text-sm">
-                        <Link
-                          className="text-primary underline-offset-4 hover:underline"
-                          to={`/today?taskId=${encodeURIComponent(entry.relatedTask.id)}&contactId=${encodeURIComponent(entry.contactId)}`}
-                        >
-                          View task: {entry.relatedTask.title}
-                        </Link>
-                      </p>
-                    )}
-                  </div>
-                </li>
-              ))}
-            </ul>
-          )}
-        </CardContent>
-      </Card>
+      <InteractionDetailsModal
+        isOpen={Boolean(selectedInteraction)}
+        interaction={selectedInteraction}
+        contactName={selectedContact?.fullName || "Unknown contact"}
+        onClose={() => setSelectedInteractionId("")}
+        formatDateTime={formatDateTime}
+      />
     </section>
   );
 }

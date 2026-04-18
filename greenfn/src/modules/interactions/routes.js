@@ -18,6 +18,7 @@ const INTERACTION_TYPES = new Set([
   "GENERAL_NOTE",
 ]);
 const INTERACTION_NOTES_MAX_LENGTH = 4000;
+const INTERACTION_TITLE_MAX_LENGTH = 180;
 const AI_SUMMARY_MARKER = "greenfn-ai-summary-v1";
 const AI_SUMMARY_TEXT_MAX_LENGTH = 6000;
 const AI_SUMMARY_MODEL_MAX_LENGTH = 120;
@@ -115,6 +116,24 @@ function validateNotesField(notes, errors, fieldName = "notes") {
     errors.push({
       field: fieldName,
       message: `${fieldName} must not exceed ${INTERACTION_NOTES_MAX_LENGTH} characters`,
+    });
+  }
+}
+
+function validateTitleField(title, errors, fieldName = "title") {
+  if (title === undefined || title === null) {
+    return;
+  }
+
+  if (typeof title !== "string") {
+    errors.push({ field: fieldName, message: `${fieldName} must be a string` });
+    return;
+  }
+
+  if (title.length > INTERACTION_TITLE_MAX_LENGTH) {
+    errors.push({
+      field: fieldName,
+      message: `${fieldName} must not exceed ${INTERACTION_TITLE_MAX_LENGTH} characters`,
     });
   }
 }
@@ -265,6 +284,7 @@ function validateCreateInteraction(body) {
   parseOccurredAt(body.occurredAt, "occurredAt", errors);
 
   validateNotesField(body.notes, errors);
+  validateTitleField(body.title, errors);
 
   return errors;
 }
@@ -286,6 +306,7 @@ function validateUpdateInteraction(body) {
   }
 
   validateNotesField(body.notes, errors);
+  validateTitleField(body.title, errors);
 
   return errors;
 }
@@ -367,6 +388,7 @@ function mapInteraction(interaction) {
     aiSummaryRecordId: interaction.aiSummaryRecordId || null,
     contactName: interaction.contact?.fullName || null,
     type: interaction.type,
+    title: interaction.title || null,
     occurredAt: interaction.occurredAt,
     notes: interaction.notes,
     aiSummary: interaction.aiSummary,
@@ -621,6 +643,7 @@ router.post(
           advisorId,
           type: String(req.body.type).trim().toUpperCase(),
           occurredAt,
+          title: normalizeOptionalString(req.body.title),
           notes: normalizeOptionalString(req.body.notes),
         },
         include: {
@@ -685,6 +708,10 @@ router.patch(
               ? String(req.body.type).trim().toUpperCase()
               : undefined,
           occurredAt: parsedOccurredAt,
+          title:
+            req.body.title !== undefined
+              ? normalizeOptionalString(req.body.title)
+              : undefined,
           notes:
             req.body.notes !== undefined
               ? normalizeOptionalString(req.body.notes)

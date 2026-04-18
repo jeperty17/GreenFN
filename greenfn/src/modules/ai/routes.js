@@ -688,6 +688,7 @@ async function linkSummaryToInteraction({
         advisorId,
         type: "NOTE",
         occurredAt: generatedAt,
+        title: "AI Summary",
         notes: buildSummaryPreviewNote(summaryText),
         aiSummaryRecordId: summaryRecordId,
         aiSummary: summaryLink,
@@ -741,6 +742,76 @@ router.get("/metrics", (req, res) => {
     metrics: getAIMetricsSnapshot({ windowMs }),
   });
 });
+
+router.post(
+  "/summaries/preview",
+  enforceAiRateLimit,
+  validateBody(validateGenerateSummary),
+  async (req, res, next) => {
+    try {
+      const contactId = req.body.contactId.trim();
+      await assertContactExists(contactId);
+
+      const { sourceMode, input } = buildSummaryInputFromRequest(req.body);
+
+      let summaryResult;
+      try {
+        summaryResult = await aiService.generateSummary({
+          contactId,
+          sourceMode,
+          input,
+        });
+      } catch (error) {
+        if (!isAiProviderUnavailable(error)) {
+          throw error;
+        }
+
+        summaryResult = {
+          text: buildLocalFallbackSummary({ input, sourceMode }),
+          model: "local-fallback-v1",
+          provider: "local-fallback",
+          degraded: true,
+          fallbackReason: "ai-provider-unavailable",
+          usage: {
+            estimatedInputTokens: 0,
+            estimatedOutputTokens: 0,
+            estimatedCostUsd: 0,
+          },
+        };
+
+        logAIEvent("warn", "summary_provider_unavailable_local_fallback", {
+          provider: "google",
+          model: null,
+          path: "generateSummary.preview",
+          contactId,
+          sourceMode,
+          inputText: input,
+          outputText: summaryResult.text,
+          statusCode: error?.statusCode || 503,
+          errorMessage:
+            error?.message || "AI provider unavailable; used local fallback",
+          usage: summaryResult.usage,
+        });
+      }
+
+      const generatedAt = new Date();
+
+      res.status(200).json({
+        summary: {
+          text: summaryResult.text,
+          model: summaryResult.model,
+          modelMetadata: buildModelMetadata(summaryResult),
+          sourceMode,
+          usage: summaryResult.usage,
+          degraded: Boolean(summaryResult.degraded),
+          generatedAt: generatedAt.toISOString(),
+        },
+      });
+    } catch (error) {
+      next(error);
+    }
+  },
+);
 
 router.post(
   "/summaries",

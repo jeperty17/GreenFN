@@ -129,6 +129,7 @@ model Interaction {
 
   type       InteractionType
   occurredAt DateTime        @default(now())
+  title      String?
 
   notes String?
 

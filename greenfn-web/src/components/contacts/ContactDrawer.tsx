@@ -5,6 +5,7 @@
  */
 import { type SyntheticEvent } from "react";
 import { X } from "lucide-react";
+import { createPortal } from "react-dom";
 import { Button } from "../ui/button";
 import { Input } from "../ui/input";
 import { Label } from "../ui/label";
@@ -45,13 +46,17 @@ function ContactDrawer({
 }: ContactDrawerProps) {
   if (!isOpen) return null;
 
-  return (
+  const portalTarget = typeof document !== "undefined" ? document.body : null;
+
+  if (!portalTarget) return null;
+
+  const drawerContent = (
     <>
       {/* Overlay — closes drawer on click */}
-      <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
+      <div className="fixed inset-0 z-[80] bg-black/50" onClick={onClose} />
 
       {/* Drawer panel */}
-      <div className="fixed right-0 top-0 z-50 flex h-[100dvh] w-[380px] animate-in slide-in-from-right flex-col bg-card shadow-2xl duration-200">
+      <div className="fixed right-0 top-0 z-[90] flex h-[100dvh] w-[380px] animate-in slide-in-from-right flex-col bg-card shadow-2xl duration-200">
         {/* Header */}
         <div className="flex items-center justify-between border-b px-6 py-4">
           <h3 className="text-base">
@@ -191,6 +196,8 @@ function ContactDrawer({
       </div>
     </>
   );
+
+  return createPortal(drawerContent, portalTarget);
 }
 
 export default ContactDrawer;
