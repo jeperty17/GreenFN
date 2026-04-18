@@ -38,21 +38,31 @@ async function recordTaskActivity(
     return null;
   }
 
-  return prisma.taskActivityLog.create({
-    data: {
-      taskId: task.id,
-      contactId: contact.id,
-      advisorId: advisorId || contact.advisorId || null,
-      activityType,
-      taskTitleSnapshot: task.title,
-      contactNameSnapshot: contact.fullName || "Unknown Contact",
-      dueAtSnapshot: task.dueAt || null,
-      statusSnapshot: task.status,
-      detail: buildTaskActivityDetail(activityType, detail),
-      metadata: metadata || undefined,
-      scheduledFor: scheduledFor || null,
-    },
-  });
+  try {
+    return await prisma.taskActivityLog.create({
+      data: {
+        taskId: task.id,
+        contactId: contact.id,
+        advisorId: advisorId || contact.advisorId || null,
+        activityType,
+        taskTitleSnapshot: task.title,
+        contactNameSnapshot: contact.fullName || "Unknown Contact",
+        dueAtSnapshot: task.dueAt || null,
+        statusSnapshot: task.status,
+        detail: buildTaskActivityDetail(activityType, detail),
+        metadata: metadata || undefined,
+        scheduledFor: scheduledFor || null,
+      },
+    });
+  } catch (error) {
+    // Backward-compatibility guard: allow task operations even when
+    // task activity log schema isn't applied yet in the active DB.
+    const prismaCode = error?.code;
+    if (prismaCode === "P2021" || prismaCode === "P2022") {
+      return null;
+    }
+    throw error;
+  }
 }
 
 module.exports = {

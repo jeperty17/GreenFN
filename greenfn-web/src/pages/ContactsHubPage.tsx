@@ -1,62 +1,25 @@
-import { type FormEvent, useEffect, useMemo, useState } from "react";
-import { Link } from "react-router-dom";
+/**
+ * ContactsHubPage — container page for the Contacts Hub. Owns all state and
+ * API calls; passes data and handlers down to presentational components.
+ * Does not render any UI directly beyond the layout shell.
+ */
+import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
+import { AlertCircle, Plus } from "lucide-react";
 import { API_BASE_URL } from "../config/env";
-import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
-import { Input } from "../components/ui/input";
-import { Label } from "../components/ui/label";
-import { Textarea } from "../components/ui/textarea";
+import ContactsFilterBar from "../components/contacts/ContactsFilterBar";
+import ContactsTable from "../components/contacts/ContactsTable";
+import ContactDrawer from "../components/contacts/ContactDrawer";
+import ContactsPagination from "../components/contacts/ContactsPagination";
+import type {
+  ContactFormState,
+  ContactItem,
+  ContactsResponse,
+  FormMode,
+  TagItem,
+} from "../types/contacts";
 
-type ContactType = "LEAD" | "CLIENT";
-
-type TagItem = {
-  id: string;
-  name: string;
-};
-
-type ContactItem = {
-  id: string;
-  fullName: string;
-  email: string | null;
-  phone: string | null;
-  source: string | null;
-  type: ContactType;
-  birthday: string | null;
-  priorities: string | null;
-  portfolioSummary: string | null;
-  isStarred: boolean;
-  tags: TagItem[];
-  updatedAt: string;
-};
-
-type ContactsResponse = {
-  items: ContactItem[];
-  pagination: {
-    page: number;
-    pageSize: number;
-    total: number;
-    totalPages: number;
-    hasPreviousPage: boolean;
-    hasNextPage: boolean;
-  };
-};
-
-type ContactFormState = {
-  fullName: string;
-  phone: string;
-  email: string;
-  type: ContactType;
-  source: string;
-  birthday: string;
-  priorities: string;
-  portfolioSummary: string;
-  tagNames: string;
-  isStarred: boolean;
-};
-
-type FormMode = "create" | "edit";
-
-const DEFAULT_PAGE_SIZE = 10;
+const DEFAULT_PAGE_SIZE = 6;
 
 const EMPTY_CONTACT_FORM: ContactFormState = {
   fullName: "",
@@ -81,7 +44,7 @@ function mapContactToForm(contact: ContactItem): ContactFormState {
     birthday: contact.birthday || "",
     priorities: contact.priorities || "",
     portfolioSummary: contact.portfolioSummary || "",
-    tagNames: contact.tags.map((tag) => tag.name).join(", "),
+    tagNames: contact.tags.map((t) => t.name).join(", "),
     isStarred: contact.isStarred,
   };
 }
@@ -93,52 +56,30 @@ async function extractErrorMessage(response: Response): Promise<string> {
       payload?.error?.message || `Request failed (${response.status})`;
     const details = Array.isArray(payload?.error?.details)
       ? payload.error.details.map(
-          (detail: { field: string; message: string }) =>
-            `${detail.field}: ${detail.message}`,
+          (d: { field: string; message: string }) => `${d.field}: ${d.message}`,
         )
       : [];
-
-    if (details.length > 0) {
-      return `${baseMessage}. ${details.join("; ")}`;
-    }
-
+    if (details.length > 0) return `${baseMessage}. ${details.join("; ")}`;
     return baseMessage;
-  } catch (_error) {
+  } catch {
     return `Request failed (${response.status})`;
   }
 }
 
 function ContactsHubPage() {
+  /* ── Filter state ────────────────────────────────────────────── */
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
   const [type, setType] = useState("");
   const [source, setSource] = useState("");
   const [tagFilter, setTagFilter] = useState("");
-  const [starred, setStarred] = useState("");
   const [page, setPage] = useState(1);
+
+  /* ── Data state ──────────────────────────────────────────────── */
   const [contacts, setContacts] = useState<ContactItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
-
-  const [formMode, setFormMode] = useState<FormMode>("create");
-  const [editingContactId, setEditingContactId] = useState<string | null>(null);
-  const [formState, setFormState] =
-    useState<ContactFormState>(EMPTY_CONTACT_FORM);
-  const [formErrorMessage, setFormErrorMessage] = useState("");
-  const [formSuccessMessage, setFormSuccessMessage] = useState("");
-  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
-
-  const [availableTags, setAvailableTags] = useState<TagItem[]>([]);
-  const [newTagName, setNewTagName] = useState("");
-  const [isCreatingTag, setIsCreatingTag] = useState(false);
-  const [tagErrorMessage, setTagErrorMessage] = useState("");
-  const [isCreateContactOpen, setIsCreateContactOpen] = useState(false);
-  const [isTagManagementOpen, setIsTagManagementOpen] = useState(false);
-  const [openAddTagMenuForContactId, setOpenAddTagMenuForContactId] = useState<
-    string | null
-  >(null);
-
   const [pagination, setPagination] = useState<ContactsResponse["pagination"]>({
     page: 1,
     pageSize: DEFAULT_PAGE_SIZE,
@@ -148,122 +89,100 @@ function ContactsHubPage() {
     hasNextPage: false,
   });
 
+  /* ── Form / drawer state ─────────────────────────────────────── */
+  const [isDrawerOpen, setIsDrawerOpen] = useState(false);
+  const [formMode, setFormMode] = useState<FormMode>("create");
+  const [editingContactId, setEditingContactId] = useState<string | null>(null);
+  const [formState, setFormState] =
+    useState<ContactFormState>(EMPTY_CONTACT_FORM);
+  const [formErrorMessage, setFormErrorMessage] = useState("");
+  const [formSuccessMessage, setFormSuccessMessage] = useState("");
+  const [isSubmittingForm, setIsSubmittingForm] = useState(false);
+
+  /* ── Tag management state ────────────────────────────────────── */
+  const [availableTags, setAvailableTags] = useState<TagItem[]>([]);
+  const [newTagName, setNewTagName] = useState("");
+  const [isCreatingTag, setIsCreatingTag] = useState(false);
+  const [tagErrorMessage, setTagErrorMessage] = useState("");
+
+  /* ── Query string ────────────────────────────────────────────── */
   const queryString = useMemo(() => {
     const params = new URLSearchParams();
-
     params.set("page", String(page));
     params.set("pageSize", String(DEFAULT_PAGE_SIZE));
-
-    if (search.trim()) {
-      params.set("search", search.trim());
-    }
-
-    if (type) {
-      params.set("type", type);
-    }
-
-    if (source.trim()) {
-      params.set("source", source.trim());
-    }
-
-    if (tagFilter.trim()) {
-      params.set("tag", tagFilter.trim());
-    }
-
-    if (starred) {
-      params.set("starred", starred);
-    }
-
+    if (search.trim()) params.set("search", search.trim());
+    if (type) params.set("type", type);
+    if (source.trim()) params.set("source", source.trim());
+    if (tagFilter.trim()) params.set("tag", tagFilter.trim());
     return params.toString();
-  }, [page, search, type, source, tagFilter, starred]);
+  }, [page, search, type, source, tagFilter]);
 
+  /* ── Data fetching ───────────────────────────────────────────── */
   useEffect(() => {
-    const abortController = new AbortController();
-
+    const ctrl = new AbortController();
     async function fetchContacts() {
       setIsLoading(true);
       setErrorMessage("");
-
       try {
-        const response = await fetch(
-          `${API_BASE_URL}/api/contacts?${queryString}`,
-          {
-            signal: abortController.signal,
-          },
-        );
-
-        if (!response.ok) {
-          throw new Error(`Failed to load contacts (${response.status})`);
-        }
-
-        const payload: ContactsResponse = await response.json();
+        const res = await fetch(`${API_BASE_URL}/api/contacts?${queryString}`, {
+          signal: ctrl.signal,
+        });
+        if (!res.ok) throw new Error(`Failed to load contacts (${res.status})`);
+        const payload: ContactsResponse = await res.json();
         setContacts(payload.items);
         setPagination(payload.pagination);
-      } catch (error) {
-        if ((error as Error).name === "AbortError") {
-          return;
-        }
-
-        setErrorMessage((error as Error).message || "Failed to load contacts");
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        setErrorMessage((err as Error).message || "Failed to load contacts");
       } finally {
         setIsLoading(false);
       }
     }
-
     fetchContacts();
-
-    return () => {
-      abortController.abort();
-    };
+    return () => ctrl.abort();
   }, [queryString, refreshKey]);
 
   useEffect(() => {
-    const abortController = new AbortController();
-
+    const ctrl = new AbortController();
     async function fetchTags() {
-      setTagErrorMessage("");
-
       try {
-        const response = await fetch(`${API_BASE_URL}/api/contacts/tags`, {
-          signal: abortController.signal,
+        const res = await fetch(`${API_BASE_URL}/api/contacts/tags`, {
+          signal: ctrl.signal,
         });
-
-        if (!response.ok) {
-          throw new Error(`Failed to load tags (${response.status})`);
-        }
-
-        const payload: { items: TagItem[] } = await response.json();
+        if (!res.ok) throw new Error(`Failed to load tags (${res.status})`);
+        const payload: { items: TagItem[] } = await res.json();
         setAvailableTags(payload.items);
-      } catch (error) {
-        if ((error as Error).name === "AbortError") {
-          return;
-        }
-
-        setTagErrorMessage((error as Error).message || "Failed to load tags");
+      } catch (err) {
+        if ((err as Error).name === "AbortError") return;
+        setTagErrorMessage((err as Error).message || "Failed to load tags");
       }
     }
-
     fetchTags();
-
-    return () => {
-      abortController.abort();
-    };
+    return () => ctrl.abort();
   }, [refreshKey]);
 
-  function handleApplyFilters() {
+  /* ── Helpers ─────────────────────────────────────────────────── */
+  function syncContactInList(updated: ContactItem) {
+    setContacts((cs) => cs.map((c) => (c.id === updated.id ? updated : c)));
+  }
+
+  function handleApplySearch() {
     setPage(1);
     setSearch(searchInput);
   }
 
-  function handleResetFilters() {
+  function handleClearFilters() {
     setSearchInput("");
     setSearch("");
     setType("");
     setSource("");
     setTagFilter("");
-    setStarred("");
     setPage(1);
   }
+
+  /* true when at least one filter is actively narrowing results */
+  const hasActiveFilters =
+    search !== "" || type !== "" || source.trim() !== "" || tagFilter !== "";
 
   function handleStartCreate() {
     setFormMode("create");
@@ -281,20 +200,30 @@ function ContactsHubPage() {
     setFormSuccessMessage("");
   }
 
-  async function handleSubmitContactForm(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
+  function updateFormField<K extends keyof ContactFormState>(
+    key: K,
+    value: ContactFormState[K],
+  ) {
+    setFormState((s) => ({ ...s, [key]: value }));
+  }
+
+  function handleCloseDrawer() {
+    setIsDrawerOpen(false);
+    handleStartCreate();
+  }
+
+  /* ── Handlers ────────────────────────────────────────────────── */
+  async function handleSubmitContactForm(e: SyntheticEvent<HTMLFormElement>) {
+    e.preventDefault();
     setFormErrorMessage("");
     setFormSuccessMessage("");
-
     if (!formState.fullName.trim()) {
       setFormErrorMessage("fullName is required");
       return;
     }
-
     setIsSubmittingForm(true);
-
     try {
-      const payload = {
+      const body = {
         fullName: formState.fullName,
         phone: formState.phone,
         email: formState.email,
@@ -305,140 +234,76 @@ function ContactsHubPage() {
         portfolioSummary: formState.portfolioSummary,
         tagNames: formState.tagNames
           .split(",")
-          .map((tagName) => tagName.trim())
+          .map((t) => t.trim())
           .filter(Boolean),
         isStarred: formState.isStarred,
       };
-
-      const requestUrl =
+      const url =
         formMode === "create"
           ? `${API_BASE_URL}/api/contacts`
           : `${API_BASE_URL}/api/contacts/${editingContactId}`;
-
-      const response = await fetch(requestUrl, {
+      const res = await fetch(url, {
         method: formMode === "create" ? "POST" : "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(body),
       });
-
-      if (!response.ok) {
-        throw new Error(await extractErrorMessage(response));
-      }
-
+      if (!res.ok) throw new Error(await extractErrorMessage(res));
       handleStartCreate();
       setFormSuccessMessage(
         formMode === "create"
           ? "Contact created successfully."
           : "Contact updated successfully.",
       );
-      setRefreshKey((currentValue) => currentValue + 1);
-    } catch (error) {
+      setRefreshKey((v) => v + 1);
+    } catch (err) {
       setFormErrorMessage(
-        (error as Error).message || "Failed to submit contact form",
+        (err as Error).message || "Failed to submit contact form",
       );
     } finally {
       setIsSubmittingForm(false);
     }
   }
 
-  function updateFormState<K extends keyof ContactFormState>(
-    key: K,
-    value: ContactFormState[K],
-  ) {
-    setFormState((currentState) => ({
-      ...currentState,
-      [key]: value,
-    }));
-  }
-
-  function syncContactInList(updatedContact: ContactItem) {
-    setContacts((currentContacts) =>
-      currentContacts.map((contact) =>
-        contact.id === updatedContact.id ? updatedContact : contact,
-      ),
-    );
-  }
-
   async function handleCreateTag() {
     setTagErrorMessage("");
-
     if (!newTagName.trim()) {
       setTagErrorMessage("Tag name is required");
       return;
     }
-
     setIsCreatingTag(true);
-
     try {
-      const response = await fetch(`${API_BASE_URL}/api/contacts/tags`, {
+      const res = await fetch(`${API_BASE_URL}/api/contacts/tags`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ name: newTagName.trim() }),
       });
-
-      if (!response.ok) {
-        throw new Error(await extractErrorMessage(response));
-      }
-
+      if (!res.ok) throw new Error(await extractErrorMessage(res));
       setNewTagName("");
-      setRefreshKey((currentValue) => currentValue + 1);
-    } catch (error) {
-      setTagErrorMessage((error as Error).message || "Failed to create tag");
+      setRefreshKey((v) => v + 1);
+    } catch (err) {
+      setTagErrorMessage((err as Error).message || "Failed to create tag");
     } finally {
       setIsCreatingTag(false);
     }
   }
 
-  async function handleAssignTag(contactId: string, tagId: string) {
+  async function handleDeleteTag(tagId: string) {
     setTagErrorMessage("");
-
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/contacts/${contactId}/tags`,
-        {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ tagIds: [tagId] }),
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(await extractErrorMessage(response));
-      }
-
-      const payload: { item: ContactItem } = await response.json();
-      syncContactInList(payload.item);
-      setOpenAddTagMenuForContactId(null);
-    } catch (error) {
-      setTagErrorMessage((error as Error).message || "Failed to assign tag");
-    }
-  }
-
-  async function handleRemoveTag(contactId: string, tagId: string) {
-    setTagErrorMessage("");
-
-    try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/contacts/${contactId}/tags/${tagId}`,
-        { method: "DELETE" },
-      );
-
-      if (!response.ok) {
-        throw new Error(await extractErrorMessage(response));
-      }
-
-      const payload: { item: ContactItem } = await response.json();
-      syncContactInList(payload.item);
-    } catch (error) {
-      setTagErrorMessage((error as Error).message || "Failed to remove tag");
+      const res = await fetch(`${API_BASE_URL}/api/contacts/tags/${tagId}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(await extractErrorMessage(res));
+      setAvailableTags((tags) => tags.filter((t) => t.id !== tagId));
+      setRefreshKey((v) => v + 1);
+    } catch (err) {
+      setTagErrorMessage((err as Error).message || "Failed to delete tag");
     }
   }
 
   async function handleToggleStar(contact: ContactItem) {
-    setTagErrorMessage("");
-
     try {
-      const response = await fetch(
+      const res = await fetch(
         `${API_BASE_URL}/api/contacts/${contact.id}/starred`,
         {
           method: "PATCH",
@@ -446,565 +311,132 @@ function ContactsHubPage() {
           body: JSON.stringify({ isStarred: !contact.isStarred }),
         },
       );
-
-      if (!response.ok) {
-        throw new Error(await extractErrorMessage(response));
-      }
-
-      const payload: { item: ContactItem } = await response.json();
+      if (!res.ok) throw new Error(await extractErrorMessage(res));
+      const payload: { item: ContactItem } = await res.json();
       syncContactInList(payload.item);
-    } catch (error) {
+    } catch (err) {
       setTagErrorMessage(
-        (error as Error).message || "Failed to toggle focus marker",
+        (err as Error).message || "Failed to toggle focus marker",
       );
     }
   }
 
   async function handleDeleteContact(contact: ContactItem) {
-    const shouldDelete = window.confirm(
+    const confirmed = window.confirm(
       `Delete contact ${contact.fullName}? This action cannot be undone.`,
     );
-
-    if (!shouldDelete) {
-      return;
-    }
-
+    if (!confirmed) return;
     setErrorMessage("");
-
     try {
-      const response = await fetch(
-        `${API_BASE_URL}/api/contacts/${contact.id}`,
-        {
-          method: "DELETE",
-        },
-      );
-
-      if (!response.ok) {
-        throw new Error(await extractErrorMessage(response));
-      }
-
-      if (editingContactId === contact.id) {
-        handleStartCreate();
-      }
-
-      setContacts((currentContacts) =>
-        currentContacts.filter(
-          (currentContact) => currentContact.id !== contact.id,
-        ),
-      );
-      setRefreshKey((currentValue) => currentValue + 1);
-    } catch (error) {
-      setErrorMessage((error as Error).message || "Failed to delete contact");
+      const res = await fetch(`${API_BASE_URL}/api/contacts/${contact.id}`, {
+        method: "DELETE",
+      });
+      if (!res.ok) throw new Error(await extractErrorMessage(res));
+      if (editingContactId === contact.id) handleStartCreate();
+      setContacts((cs) => cs.filter((c) => c.id !== contact.id));
+      setRefreshKey((v) => v + 1);
+    } catch (err) {
+      setErrorMessage((err as Error).message || "Failed to delete contact");
     }
   }
 
+  /* ── Render ──────────────────────────────────────────────────── */
   return (
-    <section className="page-section space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h2>Contacts Hub</h2>
-          <p className="field-hint">
-            Track leads and clients in one table with quick filtering.
-          </p>
+    <div className="space-y-5">
+      {/* ── Top bar: title + count + add button ───────────────── */}
+      <div className="flex items-center justify-between">
+        {/* h1 (Sora text-3xl font-semibold) + count badge inline for authority */}
+        <div className="flex items-center gap-3">
+          <h1>Contacts</h1>
+          <span className="rounded-full bg-secondary px-3 py-0.5 text-sm font-semibold text-primary">
+            {pagination.total} contact{pagination.total !== 1 && "s"}
+          </span>
         </div>
-        <div className="rounded-md border bg-muted px-3 py-2 text-sm text-muted-foreground">
-          {pagination.total} total contact{pagination.total === 1 ? "" : "s"}
-        </div>
-      </div>
-
-      <div className="rounded-md border bg-background p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3>{formMode === "create" ? "Create Contact" : "Edit Contact"}</h3>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              setIsCreateContactOpen((currentValue) => !currentValue)
-            }
-          >
-            {isCreateContactOpen ? "Hide" : "Show"}
-          </Button>
-        </div>
-
-        {isCreateContactOpen ? (
-          <form onSubmit={handleSubmitContactForm} className="mt-4 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2">
-              <p className="field-hint">
-                {formMode === "create"
-                  ? "Fill details and create a new contact."
-                  : "You are editing an existing contact."}
-              </p>
-              {formMode === "edit" ? (
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={handleStartCreate}
-                >
-                  Switch To Create
-                </Button>
-              ) : null}
-            </div>
-
-            <div className="form-grid">
-              <div className="field-stack">
-                <Label htmlFor="contact-full-name">Full Name</Label>
-                <Input
-                  id="contact-full-name"
-                  value={formState.fullName}
-                  onChange={(event) =>
-                    updateFormState("fullName", event.target.value)
-                  }
-                  placeholder="Enter full name"
-                  required
-                />
-              </div>
-
-              <div className="field-stack">
-                <Label htmlFor="contact-type">Type</Label>
-                <select
-                  id="contact-type"
-                  value={formState.type}
-                  onChange={(event) =>
-                    updateFormState("type", event.target.value as ContactType)
-                  }
-                  className="h-9 rounded-md border bg-background px-3 text-sm"
-                >
-                  <option value="LEAD">Lead</option>
-                  <option value="CLIENT">Client</option>
-                </select>
-              </div>
-
-              <div className="field-stack">
-                <Label htmlFor="contact-phone">Phone</Label>
-                <Input
-                  id="contact-phone"
-                  value={formState.phone}
-                  onChange={(event) =>
-                    updateFormState("phone", event.target.value)
-                  }
-                  placeholder="+65..."
-                />
-              </div>
-
-              <div className="field-stack">
-                <Label htmlFor="contact-email">Email</Label>
-                <Input
-                  id="contact-email"
-                  type="email"
-                  value={formState.email}
-                  onChange={(event) =>
-                    updateFormState("email", event.target.value)
-                  }
-                  placeholder="name@example.com"
-                />
-              </div>
-
-              <div className="field-stack">
-                <Label htmlFor="contact-source">Acquisition Source</Label>
-                <Input
-                  id="contact-source"
-                  value={formState.source}
-                  onChange={(event) =>
-                    updateFormState("source", event.target.value)
-                  }
-                  placeholder="Referral, cold call, social"
-                />
-              </div>
-
-              <div className="field-stack">
-                <Label htmlFor="contact-birthday">Birthday</Label>
-                <Input
-                  id="contact-birthday"
-                  type="date"
-                  value={formState.birthday}
-                  onChange={(event) =>
-                    updateFormState("birthday", event.target.value)
-                  }
-                />
-              </div>
-            </div>
-
-            <div className="form-grid">
-              <div className="field-stack">
-                <Label htmlFor="contact-priorities">Life Priorities</Label>
-                <Textarea
-                  id="contact-priorities"
-                  value={formState.priorities}
-                  onChange={(event) =>
-                    updateFormState("priorities", event.target.value)
-                  }
-                  placeholder="Children education, retirement, legacy planning"
-                />
-              </div>
-
-              <div className="field-stack">
-                <Label htmlFor="contact-portfolio-summary">
-                  Portfolio Summary (Optional)
-                </Label>
-                <Textarea
-                  id="contact-portfolio-summary"
-                  value={formState.portfolioSummary}
-                  onChange={(event) =>
-                    updateFormState("portfolioSummary", event.target.value)
-                  }
-                  placeholder="Short summary of policies and holdings"
-                />
-              </div>
-            </div>
-
-            <div className="field-stack">
-              <Label htmlFor="contact-tags">Tags (comma-separated)</Label>
-              <Input
-                id="contact-tags"
-                value={formState.tagNames}
-                onChange={(event) =>
-                  updateFormState("tagNames", event.target.value)
-                }
-                placeholder="High Priority, Follow Up"
-              />
-            </div>
-
-            <label className="inline-flex items-center gap-2 text-sm">
-              <input
-                type="checkbox"
-                checked={formState.isStarred}
-                onChange={(event) =>
-                  updateFormState("isStarred", event.target.checked)
-                }
-              />
-              Mark as starred/focus contact
-            </label>
-
-            {formErrorMessage ? (
-              <p className="field-error">{formErrorMessage}</p>
-            ) : null}
-            {formSuccessMessage ? (
-              <p className="field-hint text-foreground">{formSuccessMessage}</p>
-            ) : null}
-
-            <div className="flex flex-wrap gap-2">
-              <Button type="submit" disabled={isSubmittingForm}>
-                {isSubmittingForm
-                  ? "Saving..."
-                  : formMode === "create"
-                    ? "Create Contact"
-                    : "Update Contact"}
-              </Button>
-              <Button
-                type="button"
-                variant="outline"
-                onClick={handleStartCreate}
-                disabled={isSubmittingForm}
-              >
-                Reset Form
-              </Button>
-            </div>
-          </form>
-        ) : null}
-      </div>
-
-      <div className="rounded-md border bg-background p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <h3>Tag Management</h3>
-          <Button
-            type="button"
-            variant="outline"
-            onClick={() =>
-              setIsTagManagementOpen((currentValue) => !currentValue)
-            }
-          >
-            {isTagManagementOpen ? "Hide" : "Show"}
-          </Button>
-        </div>
-
-        {isTagManagementOpen ? (
-          <div className="mt-3 space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <Input
-                value={newTagName}
-                onChange={(event) => setNewTagName(event.target.value)}
-                placeholder="Create a new tag"
-                className="max-w-xs"
-              />
-              <Button
-                type="button"
-                onClick={handleCreateTag}
-                disabled={isCreatingTag}
-              >
-                {isCreatingTag ? "Creating..." : "Create Tag"}
-              </Button>
-            </div>
-            <div className="flex flex-wrap gap-2">
-              {availableTags.length > 0 ? (
-                availableTags.map((tag) => (
-                  <Badge key={tag.id} variant="secondary">
-                    {tag.name}
-                  </Badge>
-                ))
-              ) : (
-                <p className="field-hint">
-                  No tags yet. Create one to start assigning.
-                </p>
-              )}
-            </div>
-            {tagErrorMessage ? (
-              <p className="field-error">{tagErrorMessage}</p>
-            ) : null}
-          </div>
-        ) : null}
-      </div>
-
-      <div className="grid gap-3 md:grid-cols-6">
-        <Input
-          value={searchInput}
-          onChange={(event) => setSearchInput(event.target.value)}
-          placeholder="Search name, email, phone"
-          className="md:col-span-2"
-        />
-        <select
-          value={type}
-          onChange={(event) => {
-            setType(event.target.value);
-            setPage(1);
+        <Button
+          type="button"
+          onClick={() => {
+            handleStartCreate();
+            setIsDrawerOpen(true);
           }}
-          className="rounded-md border bg-background px-3 py-2 text-sm"
+          className="flex items-center gap-1.5"
         >
-          <option value="">All types</option>
-          <option value="LEAD">Lead</option>
-          <option value="CLIENT">Client</option>
-        </select>
-        <Input
-          value={source}
-          onChange={(event) => {
-            setSource(event.target.value);
-            setPage(1);
-          }}
-          placeholder="Filter by source"
-        />
-        <Input
-          value={tagFilter}
-          onChange={(event) => {
-            setTagFilter(event.target.value);
-            setPage(1);
-          }}
-          placeholder="Filter by tag"
-        />
-        <select
-          value={starred}
-          onChange={(event) => {
-            setStarred(event.target.value);
-            setPage(1);
-          }}
-          className="rounded-md border bg-background px-3 py-2 text-sm"
-        >
-          <option value="">All star states</option>
-          <option value="true">Starred only</option>
-          <option value="false">Not starred</option>
-        </select>
-      </div>
-
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" onClick={handleApplyFilters}>
-          Apply
-        </Button>
-        <Button type="button" variant="outline" onClick={handleResetFilters}>
-          Reset
+          <Plus className="h-4 w-4" />
+          Add Contact
         </Button>
       </div>
 
-      {errorMessage ? <p className="field-error">{errorMessage}</p> : null}
+      {/* ── Filter bar ────────────────────────────────────────── */}
+      <ContactsFilterBar
+        searchInput={searchInput}
+        onSearchInputChange={setSearchInput}
+        onSearchApply={handleApplySearch}
+        type={type}
+        onTypeChange={(v) => {
+          setType(v);
+          setPage(1);
+        }}
+        source={source}
+        onSourceChange={(v) => {
+          setSource(v);
+          setPage(1);
+        }}
+        tagFilter={tagFilter}
+        onTagFilterChange={(v) => {
+          setTagFilter(v);
+          setPage(1);
+        }}
+        availableTags={availableTags}
+        newTagName={newTagName}
+        isCreatingTag={isCreatingTag}
+        tagErrorMessage={tagErrorMessage}
+        onNewTagNameChange={setNewTagName}
+        onCreateTag={handleCreateTag}
+        onDeleteTag={handleDeleteTag}
+        hasActiveFilters={hasActiveFilters}
+        onClearFilters={handleClearFilters}
+      />
 
-      <div className="overflow-x-auto rounded-md border">
-        <table className="min-w-full border-collapse text-sm">
-          <thead className="bg-muted/70 text-left">
-            <tr>
-              <th className="px-3 py-2 font-medium">Name</th>
-              <th className="px-3 py-2 font-medium">Type</th>
-              <th className="px-3 py-2 font-medium">Source</th>
-              <th className="px-3 py-2 font-medium">Contact</th>
-              <th className="px-3 py-2 font-medium">Tags</th>
-              <th className="px-3 py-2 font-medium">Focus</th>
-              <th className="px-3 py-2 font-medium">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {isLoading ? (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="px-3 py-5 text-center text-muted-foreground"
-                >
-                  Loading contacts...
-                </td>
-              </tr>
-            ) : null}
-
-            {!isLoading && contacts.length === 0 ? (
-              <tr>
-                <td
-                  colSpan={7}
-                  className="px-3 py-5 text-center text-muted-foreground"
-                >
-                  No contacts found with current filters.
-                </td>
-              </tr>
-            ) : null}
-
-            {!isLoading
-              ? contacts.map((contact) => (
-                  <tr key={contact.id} className="border-t align-top">
-                    <td className="px-3 py-3 font-medium">
-                      <Link
-                        to={`/contacts/${contact.id}`}
-                        className="-mx-1 inline-flex rounded px-1 text-foreground transition-colors underline-offset-4 hover:bg-accent hover:text-primary hover:underline hover:decoration-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-2"
-                      >
-                        {contact.fullName}
-                      </Link>
-                    </td>
-                    <td className="px-3 py-3">
-                      <span className="inline-flex rounded-full border px-2 py-1 text-xs">
-                        {contact.type}
-                      </span>
-                    </td>
-                    <td className="px-3 py-3 text-muted-foreground">
-                      {contact.source || "-"}
-                    </td>
-                    <td className="space-y-1 px-3 py-3 text-muted-foreground">
-                      <p>{contact.email || "-"}</p>
-                      <p>{contact.phone || "-"}</p>
-                    </td>
-                    <td className="space-y-2 px-3 py-3 text-muted-foreground">
-                      {contact.tags.length > 0 ? (
-                        <div className="flex flex-wrap gap-1">
-                          {contact.tags.map((tag) => (
-                            <button
-                              key={tag.id}
-                              type="button"
-                              onClick={() =>
-                                handleRemoveTag(contact.id, tag.id)
-                              }
-                              className="inline-flex items-center rounded-full border px-2 py-1 text-xs hover:bg-accent"
-                              title="Remove tag"
-                            >
-                              {tag.name} x
-                            </button>
-                          ))}
-                        </div>
-                      ) : (
-                        <p>-</p>
-                      )}
-                      <div className="relative inline-block">
-                        <Button
-                          type="button"
-                          size="sm"
-                          variant="outline"
-                          disabled={
-                            availableTags.filter(
-                              (tag) =>
-                                !contact.tags.some(
-                                  (contactTag) => contactTag.id === tag.id,
-                                ),
-                            ).length === 0
-                          }
-                          onClick={() =>
-                            setOpenAddTagMenuForContactId((currentContactId) =>
-                              currentContactId === contact.id
-                                ? null
-                                : contact.id,
-                            )
-                          }
-                        >
-                          Add Tag
-                        </Button>
-
-                        {openAddTagMenuForContactId === contact.id ? (
-                          <div className="absolute left-0 z-10 mt-1 min-w-40 rounded-md border bg-background p-1 shadow-md">
-                            {availableTags
-                              .filter(
-                                (tag) =>
-                                  !contact.tags.some(
-                                    (contactTag) => contactTag.id === tag.id,
-                                  ),
-                              )
-                              .map((tag) => (
-                                <button
-                                  key={tag.id}
-                                  type="button"
-                                  onClick={() =>
-                                    handleAssignTag(contact.id, tag.id)
-                                  }
-                                  className="block w-full rounded px-2 py-1 text-left text-xs hover:bg-accent"
-                                >
-                                  {tag.name}
-                                </button>
-                              ))}
-                          </div>
-                        ) : null}
-                      </div>
-                    </td>
-                    <td className="px-3 py-3">
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant={contact.isStarred ? "default" : "outline"}
-                        onClick={() => handleToggleStar(contact)}
-                      >
-                        {contact.isStarred ? "Starred" : "Mark Star"}
-                      </Button>
-                    </td>
-                    <td className="px-3 py-3">
-                      <div className="flex flex-wrap gap-2">
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          onClick={() => handleStartEdit(contact)}
-                        >
-                          Edit
-                        </Button>
-                        <Button
-                          type="button"
-                          variant="destructive"
-                          size="sm"
-                          onClick={() => handleDeleteContact(contact)}
-                        >
-                          Delete
-                        </Button>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              : null}
-          </tbody>
-        </table>
-      </div>
-
-      <div className="flex flex-wrap items-center justify-between gap-3 text-sm">
-        <p className="text-muted-foreground">
-          Page {pagination.page} of {pagination.totalPages}
-        </p>
-        <div className="flex gap-2">
-          <Button
-            type="button"
-            variant="outline"
-            disabled={!pagination.hasPreviousPage || isLoading}
-            onClick={() =>
-              setPage((currentPage) => Math.max(1, currentPage - 1))
-            }
-          >
-            Previous
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
-            disabled={!pagination.hasNextPage || isLoading}
-            onClick={() => setPage((currentPage) => currentPage + 1)}
-          >
-            Next
-          </Button>
+      {/* ── Error banner ──────────────────────────────────────── */}
+      {errorMessage && (
+        <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          {errorMessage}
         </div>
+      )}
+
+      {/* ── Table ─────────────────────────────────────────────── */}
+      <div>
+        <ContactsTable
+          contacts={contacts}
+          isLoading={isLoading}
+          onToggleStar={handleToggleStar}
+          onEdit={(contact) => {
+            handleStartEdit(contact);
+            setIsDrawerOpen(true);
+          }}
+          onDelete={handleDeleteContact}
+        />
+        <ContactsPagination
+          pagination={pagination}
+          isLoading={isLoading}
+          onPageChange={setPage}
+        />
       </div>
-    </section>
+
+      {/* ── Add / Edit drawer ─────────────────────────────────── */}
+      <ContactDrawer
+        isOpen={isDrawerOpen}
+        formMode={formMode}
+        formState={formState}
+        formErrorMessage={formErrorMessage}
+        formSuccessMessage={formSuccessMessage}
+        isSubmittingForm={isSubmittingForm}
+        onClose={handleCloseDrawer}
+        onSubmit={handleSubmitContactForm}
+        onUpdateField={updateFormField}
+
+      />
+    </div>
   );
 }
 

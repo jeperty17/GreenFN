@@ -242,6 +242,7 @@ function mapContact(contact) {
     tags: Array.isArray(contact.tags)
       ? contact.tags.map((contactTag) => contactTag.tag)
       : [],
+    stageName: contact.stage?.name || null,
     updatedAt: contact.updatedAt,
   };
 }
@@ -695,6 +696,7 @@ router.get("/:contactId", async (req, res, next) => {
         id: req.params.contactId,
         advisorId,
       },
+      include: { stage: true },
     });
 
     if (!contact) {

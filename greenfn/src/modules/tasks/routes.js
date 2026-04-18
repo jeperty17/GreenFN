@@ -10,12 +10,14 @@ const {
 
 const router = express.Router();
 
-const DEFAULT_ADVISOR_ID = "seed-user-001";
-
 const ALLOWED_STATUSES = new Set(["OPEN", "DONE", "CANCELED"]);
 
 function getAdvisorId(req) {
-  return req.authUser?.id || DEFAULT_ADVISOR_ID;
+  const advisorId = req.authUser?.id;
+  if (!advisorId) {
+    throw httpError(401, "Authentication required");
+  }
+  return advisorId;
 }
 
 // GET /api/tasks

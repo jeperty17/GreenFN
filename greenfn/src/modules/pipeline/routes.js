@@ -5,10 +5,12 @@ const { validateBody, requiredString } = require("../../middleware/validate");
 
 const router = express.Router();
 
-const DEFAULT_ADVISOR_ID = "seed-user-001";
-
 function getAdvisorId(req) {
-  return req.authUser?.id || DEFAULT_ADVISOR_ID;
+  const advisorId = req.authUser?.id;
+  if (!advisorId) {
+    throw httpError(401, "Authentication required");
+  }
+  return advisorId;
 }
 
 const TERMINAL_STAGES = new Set(["closed won", "closed lost"]);
@@ -580,7 +582,7 @@ router.patch(
       await prisma.pipelineStageTransition.create({
         data: {
           contactId,
-          advisorId: ADVISOR_ID,
+          advisorId,
           fromStageId: contact.stageId,
           fromStageName,
           toStageId: stage.id,
