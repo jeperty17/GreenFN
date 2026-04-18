@@ -1,4 +1,5 @@
 const express = require("express");
+const bcrypt = require("bcryptjs");
 const { validateBody, requiredString } = require("../../middleware/validate");
 const { issueAccessToken } = require("../../lib/jwtAuth");
 const { requireAuth } = require("../../middleware/requireAuth");
@@ -14,7 +15,29 @@ function validateLogin(body) {
   return errors;
 }
 
-async function resolveAdvisorForLogin(email) {
+function validateSignup(body) {
+  const errors = [];
+  requiredString(body.name, "name", errors);
+  requiredString(body.email, "email", errors);
+  requiredString(body.password, "password", errors);
+
+  const email = String(body.email || "").trim();
+  if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+    errors.push({ field: "email", message: "email must be valid" });
+  }
+
+  const password = String(body.password || "");
+  if (password && password.length < 8) {
+    errors.push({
+      field: "password",
+      message: "password must be at least 8 characters",
+    });
+  }
+
+  return errors;
+}
+
+async function resolveAdvisorForLogin(email, includePasswordHash = false) {
   const normalizedEmail = String(email || "")
     .trim()
     .toLowerCase();
@@ -27,7 +50,12 @@ async function resolveAdvisorForLogin(email) {
           mode: "insensitive",
         },
       },
-      select: { id: true, email: true, name: true },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        ...(includePasswordHash ? { passwordHash: true } : {}),
+      },
     });
 
     if (advisorByEmail) {
@@ -35,29 +63,53 @@ async function resolveAdvisorForLogin(email) {
         id: advisorByEmail.id,
         email: advisorByEmail.email,
         name: advisorByEmail.name || "GreenFN Advisor",
+        ...(includePasswordHash
+          ? { passwordHash: advisorByEmail.passwordHash || null }
+          : {}),
       };
     }
 
-    const firstAdvisor = await prisma.user.findFirst({
-      orderBy: { createdAt: "asc" },
-      select: { id: true, email: true, name: true },
-    });
-
-    if (firstAdvisor) {
-      return {
-        id: firstAdvisor.id,
-        email: firstAdvisor.email,
-        name: firstAdvisor.name || "GreenFN Advisor",
-      };
-    }
+    return null;
   } catch (_error) {
-    // Fall through to local-only fallback identity.
+    return null;
+  }
+}
+
+async function ensureAdvisorForEnvLogin(email) {
+  const normalizedEmail = String(email || "")
+    .trim()
+    .toLowerCase();
+
+  const existingAdvisor = await resolveAdvisorForLogin(normalizedEmail);
+  if (existingAdvisor?.id) {
+    return existingAdvisor;
   }
 
+  const createdAdvisor = await prisma.user.create({
+    data: {
+      email: normalizedEmail,
+      name: "GreenFN Advisor",
+    },
+    select: { id: true, email: true, name: true },
+  });
+
   return {
-    id: "local-auth-user",
-    email: normalizedEmail || AUTH_LOGIN_EMAIL.toLowerCase(),
-    name: "GreenFN Advisor",
+    id: createdAdvisor.id,
+    email: createdAdvisor.email,
+    name: createdAdvisor.name || "GreenFN Advisor",
+  };
+}
+
+async function issueTokenForAdvisor(advisor) {
+  const accessToken = issueAccessToken(advisor);
+  return {
+    accessToken,
+    user: {
+      id: advisor.id,
+      email: advisor.email,
+      name: advisor.name || "GreenFN Advisor",
+    },
+    tokenType: "Bearer",
   };
 }
 
@@ -71,24 +123,83 @@ router.post("/login", validateBody(validateLogin), async (req, res, next) => {
       .trim()
       .toLowerCase();
     const password = String(req.body.password || "");
+    const advisorForEmail = await resolveAdvisorForLogin(email, true);
 
-    if (
-      email !== AUTH_LOGIN_EMAIL.toLowerCase() ||
-      password !== AUTH_LOGIN_PASSWORD
-    ) {
-      res.status(401).json({ message: "Invalid credentials" });
+    if (advisorForEmail?.id && advisorForEmail.passwordHash) {
+      const isPasswordValid = await bcrypt.compare(
+        password,
+        advisorForEmail.passwordHash,
+      );
+      if (!isPasswordValid) {
+        res.status(401).json({ message: "Invalid credentials" });
+        return;
+      }
+
+      res.json(
+        await issueTokenForAdvisor({
+          id: advisorForEmail.id,
+          email: advisorForEmail.email,
+          name: advisorForEmail.name,
+        }),
+      );
       return;
     }
 
-    const advisor = await resolveAdvisorForLogin(email);
+    if (
+      email === AUTH_LOGIN_EMAIL.toLowerCase() &&
+      password === AUTH_LOGIN_PASSWORD
+    ) {
+      const advisor = advisorForEmail?.id
+        ? {
+            id: advisorForEmail.id,
+            email: advisorForEmail.email,
+            name: advisorForEmail.name,
+          }
+        : await ensureAdvisorForEnvLogin(email);
+      res.json(await issueTokenForAdvisor(advisor));
+      return;
+    }
 
-    const accessToken = issueAccessToken(advisor);
+    res.status(401).json({ message: "Invalid credentials" });
+  } catch (error) {
+    next(error);
+  }
+});
 
-    res.json({
-      accessToken,
-      user: advisor,
-      tokenType: "Bearer",
+router.post("/signup", validateBody(validateSignup), async (req, res, next) => {
+  try {
+    const name = String(req.body.name || "").trim();
+    const email = String(req.body.email || "")
+      .trim()
+      .toLowerCase();
+    const password = String(req.body.password || "");
+
+    const existingUser = await prisma.user.findFirst({
+      where: {
+        email: {
+          equals: email,
+          mode: "insensitive",
+        },
+      },
+      select: { id: true },
     });
+
+    if (existingUser) {
+      res.status(409).json({ message: "Email is already in use" });
+      return;
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    const createdUser = await prisma.user.create({
+      data: {
+        name,
+        email,
+        passwordHash,
+      },
+      select: { id: true, email: true, name: true },
+    });
+
+    res.status(201).json(await issueTokenForAdvisor(createdUser));
   } catch (error) {
     next(error);
   }

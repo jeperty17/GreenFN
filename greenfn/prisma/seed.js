@@ -10,6 +10,7 @@ try {
 }
 const { PrismaPg } = require("@prisma/adapter-pg");
 const { Pool } = require("pg");
+const bcrypt = require("bcryptjs");
 
 // Seed bypasses the Prisma proxy and connects directly via pg adapter.
 // DIRECT_URL must be reachable (port 5432). If it times out locally,
@@ -32,6 +33,7 @@ const prisma = new PrismaClient({ adapter: new PrismaPg(pool) });
 
 const ADVISOR_ID = "seed-user-001";
 const ADVISOR_EMAIL = "advisor.seed@greenfn.local";
+const ADVISOR_PASSWORD = process.env.AUTH_LOGIN_PASSWORD || "password123";
 
 const STAGES = [
   { id: "seed-stage-001", name: "New", order: 1 },
@@ -80,12 +82,18 @@ const TAGS = [
 
 async function seed() {
   console.log("Starting seed...");
+  const seedPasswordHash = await bcrypt.hash(ADVISOR_PASSWORD, 10);
 
   // ── Advisor user ───────────────────────────────────────────────────────
   await prisma.user.upsert({
     where: { id: ADVISOR_ID },
-    update: {},
-    create: { id: ADVISOR_ID, email: ADVISOR_EMAIL, name: "Seed Advisor" },
+    update: { passwordHash: seedPasswordHash },
+    create: {
+      id: ADVISOR_ID,
+      email: ADVISOR_EMAIL,
+      name: "Seed Advisor",
+      passwordHash: seedPasswordHash,
+    },
   });
   console.log("Upserted advisor user.");
 

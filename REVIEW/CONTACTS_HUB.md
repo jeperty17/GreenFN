@@ -262,3 +262,203 @@ npm run dev
 - `greenfn-web/src/pages/ContactsHubPage.tsx` — made contact name column entries clickable links.
 - `greenfn-web/src/pages/ContactDetailsPage.tsx` — new dedicated contact details page with related data sections and back button.
 - `greenfn-web/src/routes/AppRoutes.tsx` — added `/contacts/:contactId` route.
+
+---
+
+## Contact Details Save 404 Fix
+
+### Summary
+
+Fixed contact updates from the per-contact details page so edits save successfully:
+
+- Replaced unsupported `PUT /api/contacts/:contactId` calls with supported `PATCH /api/contacts/:contactId`.
+- Applied this to both the main Save action and the starred toggle update request.
+- Added explicit non-2xx handling for the starred toggle request so failed writes are surfaced and the optimistic UI can revert.
+
+### Reproducible Validation
+
+```bash
+cd greenfn-web
+npm run build
+```
+
+Run app locally:
+
+```bash
+cd greenfn-web
+npm run dev
+```
+
+### Observable Checks
+
+- Open a contact details page (`/contacts/:contactId`).
+- Click `Edit`, change any field, and click `Save` → no 404 error.
+- Toggle starred state from the details page and refresh → state persists.
+
+### Files Updated
+
+- `greenfn-web/src/pages/ContactDetailsPage.tsx` — changed update requests from `PUT` to `PATCH` and added explicit response status handling for star toggle writes.
+
+---
+
+## Contact Drawer Save Notifications + Return-to-Hub
+
+### Summary
+
+Updated the Contact Drawer submit flow for create/edit so outcomes are shown via Sonner notifications and successful submissions return to the Contacts Hub context:
+
+- On successful create/edit submit, a green Sonner success toast is shown.
+- On validation/API failure, a red Sonner error toast is shown.
+- After successful submit, the drawer closes, contact list refreshes, and navigation is set to the Contacts Hub route (`/`).
+
+### Reproducible Validation
+
+```bash
+cd greenfn-web
+npm run build
+```
+
+Run app locally:
+
+```bash
+cd greenfn-web
+npm run dev
+```
+
+### Observable Checks
+
+- Open drawer from Contacts Hub and create a contact → green success Sonner appears; drawer closes and list updates.
+- Edit an existing contact from Contacts Hub and save → green success Sonner appears; drawer closes and list updates.
+- Trigger a failing submit (for example, blank name or backend validation failure) → red error Sonner appears with the error text.
+
+### Files Updated
+
+- `greenfn-web/src/pages/ContactsHubPage.tsx` — added Sonner success/error notifications for Contact Drawer submits, closed drawer and navigated to Contacts Hub on success, and retained inline form error state for drawer context.
+
+---
+
+## Contact Details Policies Table + Add Policy Action
+
+### Summary
+
+Updated Contact Details portfolio section to use actual per-contact policy records instead of freeform portfolio notes:
+
+- Added backend policy endpoints under Contacts:
+  - `GET /api/contacts/:contactId/policies` to list policies for the contact.
+  - `POST /api/contacts/:contactId/policies` to create a new policy for the contact.
+- Updated the Contact Details page portfolio section to render a policy table.
+- Wired `Add new policy` to open an inline add form; submitting creates the policy and inserts it into the table immediately.
+
+### Reproducible Validation
+
+```bash
+cd greenfn-web
+npm run build
+```
+
+Run app locally:
+
+```bash
+cd greenfn-web
+npm run dev
+```
+
+Backend route module load check:
+
+```bash
+cd greenfn
+node -e "require('./src/modules/contacts/routes'); console.log('contacts-routes-ok')"
+```
+
+### Observable Checks
+
+- Open `/contacts/:contactId` and scroll to `Portfolio Summary`.
+- Existing policies (if any) render in a table with type/provider/start/end/details.
+- Click `Add new policy`, fill fields (policy type required), and submit.
+- Newly created policy appears in the table without page reload.
+
+### Files Updated
+
+- `greenfn/src/modules/contacts/routes.js` — added contact policy list/create endpoints and policy response mapping.
+- `greenfn-web/src/pages/ContactDetailsPage.tsx` — replaced portfolio-notes section behavior with policy table rendering and add-policy form flow.
+
+---
+
+## Contacts Hub Component Modularization Pass
+
+### Summary
+
+Refactored Contacts Hub UI composition to improve readability and keep `ContactsHubPage` focused on state/behavior orchestration:
+
+- Extracted the top title/count/action area into `ContactsHubHeader`.
+- Extracted error banner rendering into `ContactsErrorBanner`.
+- Extracted table + pagination composition into `ContactsTableSection`.
+- Promoted pagination shape into a shared `ContactsPaginationMeta` type used across contacts components.
+
+### Reproducible Validation
+
+```bash
+cd greenfn-web
+npm run build
+```
+
+Run app locally:
+
+```bash
+cd greenfn-web
+npm run dev
+```
+
+### Observable Checks
+
+- Contacts Hub header still shows total contacts and `Add Contact` action.
+- Error state still displays the destructive banner when list operations fail.
+- Contacts table/pagination behavior remains unchanged across page navigation and filters.
+
+### Files Updated
+
+- `greenfn-web/src/pages/ContactsHubPage.tsx` — simplified page render tree by delegating header/banner/table-section rendering to extracted components.
+- `greenfn-web/src/components/contacts/ContactsHubHeader.tsx` — new presentational header component.
+- `greenfn-web/src/components/contacts/ContactsErrorBanner.tsx` — new reusable error banner component for Contacts Hub.
+- `greenfn-web/src/components/contacts/ContactsTableSection.tsx` — new wrapper component for table + pagination composition.
+- `greenfn-web/src/components/contacts/ContactsPagination.tsx` — switched to shared pagination type.
+- `greenfn-web/src/types/contacts.ts` — added `ContactsPaginationMeta` for cross-component type reuse.
+
+---
+
+## Contact-Scoped Add Task Modal Behavior
+
+### Summary
+
+Specialized the `Add Task` modal when opened from a specific contact details page:
+
+- In Contact Details context, the modal is now locked to that contact.
+- Contact dropdown is replaced by a read-only contact field.
+- Task creation always submits against the current contact entity.
+- Tasks page modal behavior remains unchanged (still supports selecting any contact).
+
+### Reproducible Validation
+
+```bash
+cd greenfn-web
+npm run build
+```
+
+Run app locally:
+
+```bash
+cd greenfn-web
+npm run dev
+```
+
+### Observable Checks
+
+- Open `/contacts/:contactId` (e.g., Bob) and click `Add task`.
+- Modal shows Bob as fixed contact (no selectable contact list).
+- Create task and confirm it appears under Bob's tasks.
+- Open Tasks page and click `Add Task` — contact selector is still available there.
+
+### Files Updated
+
+- `greenfn-web/src/components/tasks/AddTaskModal.tsx` — added optional fixed-contact mode and UI/logic branch for contact-locked task creation.
+- `greenfn-web/src/pages/ContactDetailsPage.tsx` — passes current contact into `AddTaskModal` as fixed contact.

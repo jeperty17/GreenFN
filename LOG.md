@@ -755,3 +755,75 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-04-18 01:42:21 +0800
 - FILES_CHANGED: greenfn/.env.example, LOG.md
 - CHANGE_SUMMARY: Added `TASK_REMINDER_ALERT_WEBHOOK_URL` to the backend example env file so the scheduled task reminder worker's optional failure-alert webhook is documented alongside the other backend-only settings.
+
+### LOG-0090
+
+- TASK: Contacts Hub
+- SUBTASK: Fix contact details save/update endpoint method mismatch
+- COMPLETED_AT: 2026-04-18 22:25:21 +0800
+- FILES_CHANGED: greenfn-web/src/pages/ContactDetailsPage.tsx, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Updated Contact Details page update requests from `PUT` to backend-supported `PATCH` for both Save and starred-toggle flows, and added explicit non-OK response handling for starred updates so failed writes are handled correctly instead of silently appearing successful.
+
+### LOG-0091
+
+- TASK: Contacts Hub
+- SUBTASK: Add Contact Drawer submit toasts and return-to-hub behavior
+- COMPLETED_AT: 2026-04-18 22:27:11 +0800
+- FILES_CHANGED: greenfn-web/src/pages/ContactsHubPage.tsx, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Updated Contact Drawer submit flow to show green Sonner success toasts on create/edit success and red Sonner error toasts on validation/API failure, then close the drawer, refresh contacts, and navigate to the Contacts Hub route after successful saves.
+
+### LOG-0092
+
+- TASK: Contacts Hub
+- SUBTASK: Replace portfolio notes with contact policy table and add-policy action
+- COMPLETED_AT: 2026-04-18 22:31:45 +0800
+- FILES_CHANGED: greenfn/src/modules/contacts/routes.js, greenfn-web/src/pages/ContactDetailsPage.tsx, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Added contact-scoped policy list/create API endpoints, then rewired Contact Details portfolio section to load and render policies in a table and create new policies through an inline add form so new policies appear immediately in the portfolio table.
+
+### LOG-0093
+
+- TASK: Authentication
+- SUBTASK: Add user signup with name/email/password and hashed-password login
+- COMPLETED_AT: 2026-04-18 22:38:35 +0800
+- FILES_CHANGED: greenfn/src/modules/auth/routes.js, greenfn/prisma/schema.prisma, greenfn/prisma/migrations/20260418143500_user_add_password_hash/migration.sql, greenfn/prisma/seed.js, greenfn-web/src/context/AuthContext.tsx, greenfn-web/src/pages/LoginPage.tsx, REVIEW/AUTH_APPROACH.md, LOG.md
+- CHANGE_SUMMARY: Implemented `POST /api/auth/signup` for new-user registration with name/email/password, added `User.passwordHash` storage with migration, updated seed advisor to store hashed password, extended login to validate hashed credentials while preserving local env fallback auth, and wired frontend auth context/login page to support sign-up mode and immediate authenticated session for sidebar identity display.
+
+### LOG-0094
+
+- TASK: Contacts Hub
+- SUBTASK: Refactor page composition into smaller contacts components
+- COMPLETED_AT: 2026-04-18 22:40:18 +0800
+- FILES_CHANGED: greenfn-web/src/pages/ContactsHubPage.tsx, greenfn-web/src/components/contacts/ContactsHubHeader.tsx, greenfn-web/src/components/contacts/ContactsErrorBanner.tsx, greenfn-web/src/components/contacts/ContactsTableSection.tsx, greenfn-web/src/components/contacts/ContactsPagination.tsx, greenfn-web/src/types/contacts.ts, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Split Contacts Hub rendering into dedicated header, error-banner, and table-section components, and introduced a shared contacts pagination type so page-level code is easier to scan while preserving existing behavior and interactions.
+
+### LOG-0095
+
+- TASK: Authentication
+- SUBTASK: Fix contact-create advisor foreign key violations
+- COMPLETED_AT: 2026-04-18 22:45:23 +0800
+- FILES_CHANGED: greenfn/src/modules/auth/routes.js, greenfn/src/modules/contacts/routes.js, REVIEW/AUTH_APPROACH.md, LOG.md
+- CHANGE_SUMMARY: Removed ephemeral auth fallback identity issuance, ensured env-credential login always resolves to a persisted advisor user, and added advisor-id/email backfill logic in contacts advisor resolution so contact writes always use a valid `User` foreign key.
+
+### LOG-0096
+
+- TASK: Authentication
+- SUBTASK: Fix signup mode defaults and error-message surfacing
+- COMPLETED_AT: 2026-04-18 22:48:10 +0800
+- FILES_CHANGED: greenfn-web/src/pages/LoginPage.tsx, greenfn-web/src/context/AuthContext.tsx, REVIEW/AUTH_APPROACH.md, LOG.md
+- CHANGE_SUMMARY: Updated login/signup mode toggling so signup starts with blank credentials instead of seeded sign-in values, restored sign-in defaults when switching back, and expanded auth error parsing to read `error.message` payloads so signup failures show actionable backend messages.
+
+### LOG-0097
+
+- TASK: Authentication
+- SUBTASK: Show field-level signup validation failures in UI
+- COMPLETED_AT: 2026-04-18 22:50:08 +0800
+- FILES_CHANGED: greenfn-web/src/context/AuthContext.tsx, REVIEW/AUTH_APPROACH.md, LOG.md
+- CHANGE_SUMMARY: Added structured auth error-message parsing for backend validation detail arrays so signup/login failures now surface concrete field-level reasons instead of a generic `Validation failed` banner.
+
+### LOG-0098
+
+- TASK: Contacts Hub
+- SUBTASK: Lock contact-details Add Task modal to current contact
+- COMPLETED_AT: 2026-04-18 23:28:42 +0800
+- FILES_CHANGED: greenfn-web/src/components/tasks/AddTaskModal.tsx, greenfn-web/src/pages/ContactDetailsPage.tsx, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Added fixed-contact mode to AddTaskModal and wired ContactDetailsPage to pass current contact, so add-task actions from a specific contact are constrained to that contact while preserving global Tasks page contact-selection behavior.

@@ -26,9 +26,16 @@ interface AddTaskModalProps {
   onClose: () => void;
   /** Called after a task is successfully created; parent should refetch tasks. */
   onSuccess: () => void;
+  /** When provided, task creation is locked to this contact (no contact selector). */
+  fixedContact?: ContactOption | null;
 }
 
-function AddTaskModal({ isOpen, onClose, onSuccess }: AddTaskModalProps) {
+function AddTaskModal({
+  isOpen,
+  onClose,
+  onSuccess,
+  fixedContact = null,
+}: AddTaskModalProps) {
   const [contacts, setContacts] = useState<ContactOption[]>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
 
@@ -42,7 +49,7 @@ function AddTaskModal({ isOpen, onClose, onSuccess }: AddTaskModalProps) {
 
   // Fetch contacts each time the modal opens
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || fixedContact?.id) return;
 
     const abortController = new AbortController();
 
@@ -68,7 +75,14 @@ function AddTaskModal({ isOpen, onClose, onSuccess }: AddTaskModalProps) {
 
     fetchContacts();
     return () => abortController.abort();
-  }, [isOpen]);
+  }, [isOpen, fixedContact?.id]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!fixedContact?.id) return;
+    setContactId(fixedContact.id);
+    setContacts([fixedContact]);
+  }, [isOpen, fixedContact]);
 
   function resetForm() {
     setContactId("");
@@ -128,12 +142,19 @@ function AddTaskModal({ isOpen, onClose, onSuccess }: AddTaskModalProps) {
         </DialogHeader>
 
         <div className="space-y-4 py-2">
-          {/* Contact selector */}
+          {/* Contact selector (hidden when modal is fixed to one contact) */}
           <div className="space-y-1.5">
             <Label htmlFor="add-task-contact">
               Contact <span className="text-destructive">*</span>
             </Label>
-            {isLoadingContacts ? (
+            {fixedContact?.id ? (
+              <div
+                id="add-task-contact"
+                className="w-full rounded-md border border-input bg-muted/40 px-3 py-2 text-sm text-foreground"
+              >
+                {fixedContact.fullName}
+              </div>
+            ) : isLoadingContacts ? (
               <p className="text-sm text-muted-foreground">Loading contacts…</p>
             ) : (
               <select

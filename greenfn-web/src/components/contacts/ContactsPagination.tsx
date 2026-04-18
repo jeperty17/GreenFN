@@ -4,18 +4,10 @@
  */
 import { ChevronLeft, ChevronRight } from "lucide-react";
 import { getPageNumbers } from "./contactUtils";
-
-interface PaginationState {
-  page: number;
-  pageSize: number;
-  total: number;
-  totalPages: number;
-  hasPreviousPage: boolean;
-  hasNextPage: boolean;
-}
+import type { ContactsPaginationMeta } from "../../types/contacts";
 
 interface ContactsPaginationProps {
-  pagination: PaginationState;
+  pagination: ContactsPaginationMeta;
   isLoading: boolean;
   onPageChange: (page: number) => void;
 }
