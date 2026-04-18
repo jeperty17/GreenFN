@@ -51,7 +51,7 @@ function ContactDrawer({
       <div className="fixed inset-0 z-40 bg-black/30" onClick={onClose} />
 
       {/* Drawer panel */}
-      <div className="fixed right-0 top-0 z-50 flex h-full w-[380px] animate-in slide-in-from-right flex-col bg-card shadow-2xl duration-200">
+      <div className="fixed right-0 top-0 z-50 flex h-[100dvh] w-[380px] animate-in slide-in-from-right flex-col bg-card shadow-2xl duration-200">
         {/* Header */}
         <div className="flex items-center justify-between border-b px-6 py-4">
           <h3 className="text-base">
@@ -168,6 +168,18 @@ function ContactDrawer({
               Mark as starred contact
             </label>
 
+            <Button
+              type="submit"
+              className="w-full"
+              disabled={isSubmittingForm}
+            >
+              {isSubmittingForm
+                ? "Saving…"
+                : formMode === "create"
+                  ? "Save Contact"
+                  : "Update Contact"}
+            </Button>
+
             {formErrorMessage && (
               <p className="field-error">{formErrorMessage}</p>
             )}
@@ -175,22 +187,6 @@ function ContactDrawer({
               <p className="field-hint text-foreground">{formSuccessMessage}</p>
             )}
           </form>
-        </div>
-
-        {/* Footer — submit button outside the scrollable area */}
-        <div className="border-t px-6 py-4">
-          <Button
-            type="submit"
-            form={FORM_ID}
-            className="w-full"
-            disabled={isSubmittingForm}
-          >
-            {isSubmittingForm
-              ? "Saving…"
-              : formMode === "create"
-                ? "Save Contact"
-                : "Update Contact"}
-          </Button>
         </div>
       </div>
     </>
