@@ -8,8 +8,8 @@ function LoginPage() {
   const location = useLocation();
   const [mode, setMode] = useState<"signin" | "signup">("signin");
   const [name, setName] = useState("");
-  const [email, setEmail] = useState("advisor.seed@greenfn.local");
-  const [password, setPassword] = useState("password123");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -63,8 +63,8 @@ function LoginPage() {
               setMode("signin");
               setErrorMessage("");
               setName("");
-              setEmail("advisor.seed@greenfn.local");
-              setPassword("password123");
+              setEmail("");
+              setPassword("");
             }}
             className={[
               "flex-1 rounded px-3 py-1.5 text-sm font-medium transition-colors",
