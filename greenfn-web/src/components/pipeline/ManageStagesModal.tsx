@@ -384,7 +384,9 @@ function ManageStagesModal({
     <Dialog open={open} onOpenChange={(isOpen) => !isOpen && onClose()}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>Manage Stages</DialogTitle>
+          <DialogTitle className="text-xl font-semibold leading-tight tracking-tight">
+            Manage Stages
+          </DialogTitle>
         </DialogHeader>
 
         <DndContext
@@ -417,7 +419,7 @@ function ManageStagesModal({
               ))}
 
               {localStages.length === 0 && (
-                <p className="py-4 text-center text-sm text-muted-foreground">
+                <p className="py-4 text-center text-sm leading-6 text-muted-foreground">
                   No stages yet. Add one below.
                 </p>
               )}
@@ -428,7 +430,7 @@ function ManageStagesModal({
         {/* Pending order banner — visible only when local order differs from server */}
         {hasPendingOrder && (
           <div className="flex items-center justify-between gap-3 rounded-md border border-amber-200 bg-amber-50 px-3 py-2 text-sm text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-400">
-            <span className="shrink-0">Order changed.</span>
+            <span className="shrink-0 font-medium">Order changed</span>
             <div className="flex gap-2">
               <Button
                 variant="ghost"

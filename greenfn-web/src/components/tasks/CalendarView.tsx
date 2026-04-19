@@ -67,23 +67,26 @@ function chipColorClass(dueAtIso: string): string {
 const rdpClassNames = {
   root: "w-full",
   months: "w-full",
-  month: "w-full",
-  month_caption: "relative flex h-10 items-center justify-center mb-1",
-  caption_label: "text-sm font-semibold",
-  nav: "absolute inset-x-0 flex items-center justify-between",
+  month:
+    "grid w-full grid-cols-[auto_1fr_auto] grid-rows-[auto_auto] items-center gap-y-2",
+  month_caption:
+    "col-start-2 row-start-1 mb-0 flex h-10 items-center justify-center",
+  caption_label: "text-sm font-semibold text-[oklch(0.24_0.04_145)]",
+  nav: "flex items-center gap-2",
   button_previous:
-    "h-7 w-7 rounded-md hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer transition-colors",
+    "col-start-1 row-start-1 flex h-8 w-8 items-center justify-center justify-self-start rounded-md border border-[oklch(0.86_0.02_145)] bg-[oklch(0.99_0.004_145)] text-[oklch(0.32_0.04_145)] shadow-sm transition-colors hover:bg-[oklch(0.965_0.012_145)] hover:text-[oklch(0.22_0.05_145)]",
   button_next:
-    "h-7 w-7 rounded-md hover:bg-muted flex items-center justify-center text-muted-foreground hover:text-foreground cursor-pointer transition-colors",
-  month_grid: "w-full table-fixed border-collapse",
+    "col-start-3 row-start-1 flex h-8 w-8 items-center justify-center justify-self-end rounded-md border border-[oklch(0.86_0.02_145)] bg-[oklch(0.99_0.004_145)] text-[oklch(0.32_0.04_145)] shadow-sm transition-colors hover:bg-[oklch(0.965_0.012_145)] hover:text-[oklch(0.22_0.05_145)]",
+  month_grid:
+    "col-span-3 row-start-2 w-full table-fixed border-separate border-spacing-0",
   weekdays: "",
   weekday:
-    "text-[11px] font-medium text-muted-foreground text-center pb-1.5 pt-0.5",
+    "pb-2 pt-1 text-center text-[11px] font-semibold uppercase tracking-[0.06em] text-[oklch(0.45_0.03_145)]",
   weeks: "",
   week: "",
   day: "",
   day_button: "",
-  chevron: "h-4 w-4 fill-current",
+  chevron: "h-4 w-4 stroke-[2.5]",
 };
 
 // ─── CalendarTaskRow — one task row inside the day panel ─────────────────────
@@ -148,8 +151,10 @@ function CalendarTaskRow({
           }`}
         />
         <div className="min-w-0 flex-1">
-          <p className="text-sm font-medium leading-snug">{task.title}</p>
-          <p className="text-xs text-muted-foreground">{task.contactName}</p>
+          <p className="text-sm font-semibold leading-6">{task.title}</p>
+          <p className="text-sm leading-6 text-muted-foreground">
+            {task.contactName}
+          </p>
           {task.stageName && (
             <Badge
               variant="secondary"
@@ -172,7 +177,7 @@ function CalendarTaskRow({
           />
           <Button
             size="sm"
-            className="h-7 text-xs px-2"
+            className="h-7 px-2 text-sm"
             onClick={handleRescheduleSubmit}
             disabled={isRescheduling || !rescheduleDate}
           >
@@ -181,7 +186,7 @@ function CalendarTaskRow({
           <Button
             size="sm"
             variant="ghost"
-            className="h-7 text-xs px-2"
+            className="h-7 px-2 text-sm"
             onClick={() => {
               setShowReschedule(false);
               setRescheduleDate("");
@@ -206,7 +211,7 @@ function CalendarTaskRow({
           <Button
             size="sm"
             variant="outline"
-            className="h-6 text-xs px-2"
+            className="h-6 px-2 text-sm"
             onClick={handleMarkDone}
             disabled={isMarkingDone || isDeleting}
           >
@@ -215,7 +220,7 @@ function CalendarTaskRow({
           <Button
             size="sm"
             variant="ghost"
-            className="h-6 text-xs px-2"
+            className="h-6 px-2 text-sm"
             onClick={() => setShowReschedule(true)}
             disabled={isMarkingDone || isDeleting}
           >
@@ -247,14 +252,14 @@ function DayPanel({
   onDelete,
 }: DayPanelProps) {
   return (
-    <div className="w-72 shrink-0 rounded-lg border border-border bg-background shadow-md overflow-hidden">
+    <div className="overflow-hidden rounded-xl border border-[oklch(0.88_0.02_145)] bg-[oklch(0.995_0.004_145)] shadow-[0_14px_32px_-24px_oklch(0.28_0.04_145/0.45)] xl:sticky xl:top-4">
       {/* Header */}
-      <div className="flex items-start justify-between gap-2 px-4 py-3 border-b border-border bg-muted/30">
+      <div className="flex items-start justify-between gap-2 border-b border-[oklch(0.88_0.02_145)] bg-[oklch(0.97_0.02_145)] px-4 py-3">
         <div>
-          <p className="text-xs font-semibold text-foreground leading-snug">
+          <p className="text-sm font-semibold leading-6 text-foreground">
             {formatDateKey(dateKey)}
           </p>
-          <p className="text-xs text-muted-foreground mt-0.5">
+          <p className="mt-0.5 text-sm tabular-nums text-muted-foreground">
             {tasks.length} {tasks.length === 1 ? "task" : "tasks"}
           </p>
         </div>
@@ -268,10 +273,10 @@ function DayPanel({
       </div>
 
       {/* Task list */}
-      <div className="px-4 overflow-y-auto max-h-[480px]">
+      <div className="max-h-[420px] overflow-y-auto px-4">
         {tasks.length === 0 ? (
-          <p className="py-6 text-xs text-muted-foreground text-center">
-            No tasks on this day.
+          <p className="py-6 text-sm text-muted-foreground text-center">
+            No tasks on this day
           </p>
         ) : (
           tasks.map((task) => (
@@ -356,11 +361,11 @@ export default function CalendarView() {
       body: JSON.stringify({ status: "DONE" }),
     });
     if (!res.ok) {
-      toast.error("Failed to mark task as done.");
+      toast.error("Failed to mark task as done");
       return;
     }
     removeTask(taskId);
-    toast.success("Task marked as done.");
+    toast.success("Task marked as done");
   }
 
   async function handleReschedule(taskId: string, newDueAt: string) {
@@ -370,7 +375,7 @@ export default function CalendarView() {
       body: JSON.stringify({ dueAt: newDueAt }),
     });
     if (!res.ok) {
-      toast.error("Failed to reschedule task.");
+      toast.error("Failed to reschedule task");
       return;
     }
     const payload = await res.json().catch(() => null);
@@ -381,7 +386,7 @@ export default function CalendarView() {
         t.id === taskId ? { ...t, dueAt: updatedTask?.dueAt || newDueAt } : t,
       ),
     );
-    toast.success("Task rescheduled.");
+    toast.success("Task rescheduled");
   }
 
   async function handleDelete(taskId: string) {
@@ -389,11 +394,11 @@ export default function CalendarView() {
       method: "DELETE",
     });
     if (!res.ok) {
-      toast.error("Failed to delete task.");
+      toast.error("Failed to delete task");
       return;
     }
     removeTask(taskId);
-    toast.success("Task deleted.");
+    toast.success("Task deleted");
   }
 
   /**
@@ -482,29 +487,54 @@ export default function CalendarView() {
   }
 
   return (
-    <div className="flex gap-4 items-start">
-      {/* Calendar grid */}
-      <div className="flex-1 min-w-0">
-        <DayPicker
-          month={month}
-          onMonthChange={setMonth}
-          showOutsideDays
-          classNames={rdpClassNames}
-          components={{ Day: CustomDay }}
-        />
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center gap-2.5 rounded-xl border border-[oklch(0.88_0.02_145)] bg-[oklch(0.99_0.006_145)] px-3 py-2">
+        <span className="text-sm font-semibold uppercase tracking-[0.08em] text-[oklch(0.37_0.09_145)]">
+          Calendar Legend
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-red-50 px-2 py-0.5 text-sm text-red-700">
+          <span className="h-2 w-2 rounded-full bg-red-500" />
+          Overdue
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-amber-50 px-2 py-0.5 text-sm text-amber-700">
+          <span className="h-2 w-2 rounded-full bg-amber-500" />
+          Due Today
+        </span>
+        <span className="inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-2 py-0.5 text-sm text-primary">
+          <span className="h-2 w-2 rounded-full bg-primary" />
+          Upcoming
+        </span>
       </div>
 
-      {/* Day detail panel — appears when a day is selected */}
-      {selectedDateKey && (
-        <DayPanel
-          dateKey={selectedDateKey}
-          tasks={tasksForSelectedDay}
-          onClose={() => setSelectedDateKey(null)}
-          onMarkDone={handleMarkDone}
-          onReschedule={handleReschedule}
-          onDelete={handleDelete}
-        />
-      )}
+      <div className="grid items-start gap-4 xl:grid-cols-[minmax(0,1fr)_20rem]">
+        {/* Calendar grid */}
+        <div className="min-w-0 overflow-hidden rounded-xl border border-[oklch(0.88_0.02_145)] bg-[oklch(0.995_0.004_145)] p-3 sm:p-4">
+          <DayPicker
+            month={month}
+            onMonthChange={setMonth}
+            navLayout="around"
+            showOutsideDays
+            classNames={rdpClassNames}
+            components={{ Day: CustomDay }}
+          />
+        </div>
+
+        {/* Day detail panel — appears when a day is selected */}
+        {selectedDateKey ? (
+          <DayPanel
+            dateKey={selectedDateKey}
+            tasks={tasksForSelectedDay}
+            onClose={() => setSelectedDateKey(null)}
+            onMarkDone={handleMarkDone}
+            onReschedule={handleReschedule}
+            onDelete={handleDelete}
+          />
+        ) : (
+          <div className="rounded-xl border border-dashed border-[oklch(0.86_0.02_145)] bg-[oklch(0.992_0.005_145)] px-4 py-5 text-sm text-[oklch(0.42_0.04_145)]">
+            Select a date on the calendar to view and manage tasks
+          </div>
+        )}
+      </div>
     </div>
   );
 }

@@ -3,7 +3,7 @@
  * entries while keeping the page itself focused on orchestration/state.
  */
 
-import { Sparkles, X } from "lucide-react";
+import { AlertTriangle, Sparkles, X } from "lucide-react";
 import { useEffect, useState } from "react";
 import { createPortal } from "react-dom";
 import { toast } from "sonner";
@@ -26,6 +26,14 @@ interface LogInteractionModalProps {
   onSetFormState: (
     updater: (prev: InteractionFormState) => InteractionFormState,
   ) => void;
+  stepOneBackAction?: {
+    label?: string;
+    onClick: () => void;
+  };
+  stepOneSkipAction?: {
+    label?: string;
+    onClick: () => void;
+  };
 }
 
 function LogInteractionModal({
@@ -39,11 +47,14 @@ function LogInteractionModal({
   onClose,
   onSubmit,
   onSetFormState,
+  stepOneBackAction,
+  stepOneSkipAction,
 }: LogInteractionModalProps) {
   const [step, setStep] = useState<1 | 2>(1);
   const [isGeneratingSummary, setIsGeneratingSummary] = useState(false);
   const [originalNotesSnapshot, setOriginalNotesSnapshot] = useState("");
   const [isComparingOriginal, setIsComparingOriginal] = useState(false);
+  const [showStepOneSkipWarning, setShowStepOneSkipWarning] = useState(false);
   const [contentBounds, setContentBounds] = useState({ left: 0, right: 0 });
 
   useEffect(() => {
@@ -52,6 +63,7 @@ function LogInteractionModal({
     setIsGeneratingSummary(false);
     setOriginalNotesSnapshot("");
     setIsComparingOriginal(false);
+    setShowStepOneSkipWarning(false);
   }, [isOpen]);
 
   useEffect(() => {
@@ -170,10 +182,7 @@ function LogInteractionModal({
 
   const modalContent = (
     <div className="fixed inset-0 z-50">
-      <div
-        className="absolute inset-0 bg-[oklch(0.18_0.01_145/0.45)]"
-        onClick={onClose}
-      />
+      <div className="absolute inset-0 bg-black/80" onClick={onClose} />
 
       <div
         className="absolute inset-y-0 flex items-center justify-center p-4"
@@ -352,27 +361,91 @@ function LogInteractionModal({
               </p>
             )}
 
+            {step === 1 && stepOneSkipAction && showStepOneSkipWarning ? (
+              <div className="flex items-start gap-3 rounded-md border border-yellow-300/60 bg-yellow-50 px-4 py-3 text-sm dark:border-yellow-700/40 dark:bg-yellow-950/30">
+                <AlertTriangle className="mt-0.5 h-4 w-4 shrink-0 text-yellow-600 dark:text-yellow-400" />
+                <div className="flex-1">
+                  <p className="font-medium text-yellow-800 dark:text-yellow-300">
+                    Skip this step?
+                  </p>
+                  <p className="mt-0.5 text-yellow-700 dark:text-yellow-400">
+                    You have not logged an interaction. Are you sure you want to
+                    skip?
+                  </p>
+                  <div className="mt-3 flex gap-2">
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="border-yellow-400 text-yellow-800 hover:bg-yellow-100 dark:border-yellow-700 dark:text-yellow-300 dark:hover:bg-yellow-900/50"
+                      onClick={() => setShowStepOneSkipWarning(false)}
+                      disabled={isSavingInteraction}
+                    >
+                      Don't skip
+                    </Button>
+                    <Button
+                      type="button"
+                      size="sm"
+                      className="bg-yellow-600 text-white hover:bg-yellow-700 dark:bg-yellow-700 dark:hover:bg-yellow-600"
+                      onClick={() => {
+                        setShowStepOneSkipWarning(false);
+                        stepOneSkipAction.onClick();
+                      }}
+                      disabled={isSavingInteraction}
+                    >
+                      Skip anyway
+                    </Button>
+                  </div>
+                </div>
+              </div>
+            ) : null}
+
             <div className="flex items-center justify-end gap-2 border-t pt-5">
-              <Button
-                type="button"
-                variant="outline"
-                onClick={onClose}
-                disabled={isSavingInteraction}
-              >
-                Cancel
-              </Button>
-              {step === 1 ? (
+              {!(step === 1 && stepOneBackAction) ? (
                 <Button
                   type="button"
-                  onClick={() => setStep(2)}
-                  disabled={
-                    isSavingInteraction ||
-                    !formState.title.trim() ||
-                    !formState.interactionDate
-                  }
+                  variant="outline"
+                  onClick={onClose}
+                  disabled={isSavingInteraction}
                 >
-                  Next
+                  Cancel
                 </Button>
+              ) : null}
+              {step === 1 ? (
+                <>
+                  {stepOneBackAction ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={stepOneBackAction.onClick}
+                      disabled={isSavingInteraction}
+                    >
+                      {stepOneBackAction.label || "Back"}
+                    </Button>
+                  ) : null}
+                  {stepOneSkipAction ? (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => setShowStepOneSkipWarning(true)}
+                      disabled={isSavingInteraction || showStepOneSkipWarning}
+                    >
+                      {stepOneSkipAction.label || "Skip"}
+                    </Button>
+                  ) : null}
+                  <Button
+                    type="button"
+                    onClick={() => setStep(2)}
+                    disabled={
+                      isSavingInteraction ||
+                      showStepOneSkipWarning ||
+                      !formState.title.trim() ||
+                      !formState.interactionDate
+                    }
+                  >
+                    Next
+                  </Button>
+                </>
               ) : (
                 <>
                   <Button

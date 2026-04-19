@@ -4,6 +4,7 @@
  * Does not render any UI directly beyond the layout shell.
  */
 import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
+import { useSearchParams } from "react-router-dom";
 import { AlertCircle, Plus } from "lucide-react";
 import { API_BASE_URL } from "../config/env";
 import { Button } from "../components/ui/button";
@@ -67,6 +68,8 @@ async function extractErrorMessage(response: Response): Promise<string> {
 }
 
 function ContactsHubPage() {
+  const [searchParams, setSearchParams] = useSearchParams();
+
   /* ── Filter state ────────────────────────────────────────────── */
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -211,6 +214,17 @@ function ContactsHubPage() {
     setIsDrawerOpen(false);
     handleStartCreate();
   }
+
+  useEffect(() => {
+    if (searchParams.get("open") !== "add-contact") return;
+
+    handleStartCreate();
+    setIsDrawerOpen(true);
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.delete("open");
+    setSearchParams(nextParams, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   /* ── Handlers ────────────────────────────────────────────────── */
   async function handleSubmitContactForm(e: SyntheticEvent<HTMLFormElement>) {

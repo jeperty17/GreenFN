@@ -1,7 +1,7 @@
 /**
  * Renders one grouped section of tasks (Overdue, Due Today, or Upcoming).
- * Shows a heading with a count badge and an empty-state message when there are no tasks.
- * urgency prop is forwarded to each TaskCard for colour theming.
+ * Uses a to-do list presentation with urgency-specific grouping and a
+ * straightforward empty state.
  */
 
 import TaskCard from "./TaskCard";
@@ -12,7 +12,10 @@ interface TaskSectionProps {
   tasks: Task[];
   urgency: TaskBucket;
   onMarkDone: (taskId: string) => Promise<void>;
-  onReschedule: (taskId: string, newDueAt: string) => Promise<void>;
+  onUpdateTask: (
+    taskId: string,
+    updates: { title: string; description: string; dueAt: string },
+  ) => Promise<void>;
   onDelete: (taskId: string) => Promise<void>;
 }
 
@@ -21,41 +24,66 @@ function TaskSection({
   tasks,
   urgency,
   onMarkDone,
-  onReschedule,
+  onUpdateTask,
   onDelete,
 }: TaskSectionProps) {
-  // Section heading colour matches the urgency theme
   const headingClass =
     urgency === "overdue"
-      ? "text-red-600 dark:text-red-400"
+      ? "text-red-700"
       : urgency === "dueToday"
-        ? "text-amber-600 dark:text-amber-400"
-        : "text-foreground";
+        ? "text-amber-700"
+        : "text-[oklch(0.28_0.06_145)]";
+
+  const listContainerClass =
+    urgency === "overdue"
+      ? "border-red-200/85 bg-red-50/70 divide-red-100"
+      : urgency === "dueToday"
+        ? "border-amber-200/85 bg-amber-50/70 divide-amber-100"
+        : "border-[oklch(0.88_0.02_145)] bg-[oklch(0.985_0.008_145)] divide-[oklch(0.9_0.01_145)]";
+
+  const emptyStateClass =
+    urgency === "overdue"
+      ? "border-red-200/80 bg-red-50/60 text-red-800/90"
+      : urgency === "dueToday"
+        ? "border-amber-200/80 bg-amber-50/60 text-amber-800/90"
+        : "border-[oklch(0.88_0.02_145)] bg-[oklch(0.988_0.006_145)] text-[oklch(0.38_0.05_145)]";
 
   return (
-    <section className="space-y-3">
-      <div className="flex items-center gap-2">
-        <h3 className={`text-base font-semibold ${headingClass}`}>{title}</h3>
-        <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground">
+    <section className="space-y-3.5">
+      <div className="flex items-center gap-2.5">
+        <h3
+          className={`text-sm font-semibold uppercase tracking-[0.08em] ${headingClass}`}
+        >
+          {title}
+        </h3>
+        <span className="rounded-full bg-[oklch(0.93_0.015_145)] px-2 py-0.5 text-xs font-semibold tabular-nums text-[oklch(0.34_0.05_145)]">
           {tasks.length}
         </span>
       </div>
 
       {tasks.length === 0 ? (
-        <p className="rounded-md border border-dashed py-6 text-center text-sm text-muted-foreground">
-          No tasks here.
+        <p
+          className={`rounded-lg border border-dashed py-5 text-center text-sm ${emptyStateClass}`}
+        >
+          No tasks here
         </p>
       ) : (
-        <div className="space-y-2">
+        <div
+          className={`divide-y overflow-hidden rounded-2xl border shadow-[0_10px_28px_-24px_oklch(0.3_0.04_145/0.5)] ${listContainerClass}`}
+        >
           {tasks.map((task) => (
-            <TaskCard
+            <div
               key={task.id}
-              task={task}
-              urgency={urgency}
-              onMarkDone={onMarkDone}
-              onReschedule={onReschedule}
-              onDelete={onDelete}
-            />
+              className="px-3 py-2.5 transition-colors hover:bg-[oklch(0.985_0.01_145)] sm:px-4 sm:py-3"
+            >
+              <TaskCard
+                task={task}
+                urgency={urgency}
+                onMarkDone={onMarkDone}
+                onUpdateTask={onUpdateTask}
+                onDelete={onDelete}
+              />
+            </div>
           ))}
         </div>
       )}

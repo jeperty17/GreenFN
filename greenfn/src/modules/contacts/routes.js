@@ -315,6 +315,19 @@ async function resolveAdvisorIdFromRequest(req) {
 }
 
 async function resolveDefaultLeadStageId(advisorId) {
+  const orderZeroStage = await prisma.pipelineStage.findFirst({
+    where: {
+      advisorId,
+      order: 0,
+    },
+    orderBy: { order: "asc" },
+    select: { id: true },
+  });
+
+  if (orderZeroStage) {
+    return orderZeroStage.id;
+  }
+
   const newStage = await prisma.pipelineStage.findFirst({
     where: {
       advisorId,
@@ -329,6 +342,32 @@ async function resolveDefaultLeadStageId(advisorId) {
 
   if (newStage) {
     return newStage.id;
+  }
+
+  const firstStage = await prisma.pipelineStage.findFirst({
+    where: { advisorId },
+    orderBy: { order: "asc" },
+    select: { id: true },
+  });
+
+  return firstStage?.id || null;
+}
+
+async function resolveDefaultClientStageId(advisorId) {
+  const servicingStage = await prisma.pipelineStage.findFirst({
+    where: {
+      advisorId,
+      name: {
+        equals: "Servicing",
+        mode: "insensitive",
+      },
+    },
+    orderBy: { order: "asc" },
+    select: { id: true },
+  });
+
+  if (servicingStage) {
+    return servicingStage.id;
   }
 
   const firstStage = await prisma.pipelineStage.findFirst({
@@ -527,7 +566,7 @@ async function resolveContactForWrite(contactId, advisorId) {
       id: contactId,
       advisorId,
     },
-    select: { id: true, advisorId: true, notes: true },
+    select: { id: true, advisorId: true, type: true, notes: true },
   });
 
   if (!contact) {
@@ -723,10 +762,10 @@ router.post(
         .trim()
         .toUpperCase();
       const normalizedType = CONTACT_TYPES.has(type) ? type : "LEAD";
-      const defaultLeadStageId =
-        normalizedType === "LEAD"
-          ? await resolveDefaultLeadStageId(advisorId)
-          : null;
+      const routedStageId =
+        normalizedType === "CLIENT"
+          ? await resolveDefaultClientStageId(advisorId)
+          : await resolveDefaultLeadStageId(advisorId);
       const fullName = req.body.fullName.trim();
       const birthday = parseBirthday(req.body.birthday, "birthday", []);
       const source = normalizeOptionalString(req.body.source);
@@ -749,7 +788,7 @@ router.post(
           advisorId,
           fullName,
           type: normalizedType,
-          stageId: defaultLeadStageId,
+          stageId: routedStageId,
           email: normalizeOptionalString(req.body.email),
           phone: normalizeOptionalString(req.body.phone),
           source,
@@ -818,7 +857,15 @@ router.patch(
       }
 
       if (req.body.type !== undefined) {
-        updatedPayload.type = String(req.body.type).trim().toUpperCase();
+        const normalizedType = String(req.body.type).trim().toUpperCase();
+        updatedPayload.type = normalizedType;
+
+        if (normalizedType !== existingContact.type) {
+          updatedPayload.stageId =
+            normalizedType === "CLIENT"
+              ? await resolveDefaultClientStageId(advisorId)
+              : await resolveDefaultLeadStageId(advisorId);
+        }
       }
 
       if (req.body.email !== undefined) {

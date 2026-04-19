@@ -13,18 +13,6 @@ function getAdvisorId(req) {
   return advisorId;
 }
 
-const TERMINAL_STAGES = new Set(["closed won", "closed lost"]);
-
-const ALLOWED_STAGE_TRANSITIONS = {
-  new: new Set(["contacted", "closed lost"]),
-  contacted: new Set(["booked", "no-show", "closed lost"]),
-  booked: new Set(["in progress", "no-show", "closed lost"]),
-  "no-show": new Set(["contacted", "closed lost"]),
-  "in progress": new Set(["closed won", "closed lost", "contacted"]),
-  "closed won": new Set([]),
-  "closed lost": new Set(["contacted"]),
-};
-
 function normalizeStageName(name) {
   return String(name || "")
     .trim()
@@ -46,82 +34,6 @@ function logPipelineEvent(event, metadata = {}) {
     ...metadata,
   };
   console.info("[pipeline]", JSON.stringify(payload));
-}
-
-function assertValidStageTransition({ fromStageName, toStageName }) {
-  const from = normalizeStageName(fromStageName);
-  const to = normalizeStageName(toStageName);
-
-  if (!from || !to || from === to) {
-    return;
-  }
-
-  if (TERMINAL_STAGES.has(from) && !ALLOWED_STAGE_TRANSITIONS[from]?.has(to)) {
-    throw httpError(422, "Invalid stage transition", {
-      fromStageName,
-      toStageName,
-      reason: "Cannot move from terminal stage without explicit reopen path",
-    });
-  }
-
-  const allowed = ALLOWED_STAGE_TRANSITIONS[from];
-  if (!allowed) {
-    // Custom stage names are allowed by default to avoid blocking user-defined pipelines.
-    return;
-  }
-
-  if (!allowed.has(to)) {
-    throw httpError(422, "Invalid stage transition", {
-      fromStageName,
-      toStageName,
-      reason: `Allowed transitions from ${fromStageName}: ${Array.from(allowed).join(", ") || "none"}`,
-    });
-  }
-}
-
-function buildFollowUpSuggestion({ fromStageName, toStageName, contactName }) {
-  const to = normalizeStageName(toStageName);
-  const now = new Date();
-  let dueDate = new Date(now);
-  let message =
-    "Add a follow-up touchpoint to keep momentum after this stage change.";
-
-  if (to === "contacted") {
-    dueDate.setDate(dueDate.getDate() + 2);
-    message =
-      "Suggest scheduling the next call within 48 hours to maintain response momentum.";
-  } else if (to === "booked") {
-    dueDate.setDate(dueDate.getDate() + 1);
-    message =
-      "Suggest confirming agenda and reminders before the booked meeting.";
-  } else if (to === "no-show") {
-    dueDate.setDate(dueDate.getDate() + 1);
-    message =
-      "Suggest a recovery outreach with a new proposed slot after no-show.";
-  } else if (to === "in progress") {
-    dueDate.setDate(dueDate.getDate() + 3);
-    message =
-      "Suggest setting a clear decision checkpoint while the case is in progress.";
-  } else if (to === "closed won") {
-    dueDate.setDate(dueDate.getDate() + 7);
-    message =
-      "Suggest a post-close check-in task for onboarding and relationship continuity.";
-  } else if (to === "closed lost") {
-    dueDate.setDate(dueDate.getDate() + 14);
-    message =
-      "Suggest a re-engagement reminder in two weeks with updated value proposition.";
-  }
-
-  return {
-    triggered: true,
-    triggerType: "pipeline-stage-change",
-    contactName,
-    fromStageName,
-    toStageName,
-    message,
-    suggestedDueDateYmd: buildYmd(dueDate),
-    suggestedTaskTitle: `Follow up with ${contactName}`,
-  };
 }
 
 // GET /api/pipeline
@@ -150,6 +62,10 @@ router.get("/", async (req, res, next) => {
               type: true,
               source: true,
               stageId: true,
+              email: true,
+              phone: true,
+              isStarred: true,
+              tags: { select: { tag: { select: { name: true } } } },
             },
           })
         : [];
@@ -179,6 +95,7 @@ router.get("/", async (req, res, next) => {
           })
         : [];
     const latestInteractionByContactId = new Map();
+    const interactionCountByContactId = new Map();
     for (const interaction of interactions) {
       if (!latestInteractionByContactId.has(interaction.contactId)) {
         latestInteractionByContactId.set(
@@ -186,7 +103,23 @@ router.get("/", async (req, res, next) => {
           interaction.occurredAt,
         );
       }
+      interactionCountByContactId.set(
+        interaction.contactId,
+        (interactionCountByContactId.get(interaction.contactId) || 0) + 1,
+      );
     }
+
+    const policyCounts =
+      contactIds.length > 0
+        ? await prisma.policy.groupBy({
+            by: ["contactId"],
+            where: { contactId: { in: contactIds } },
+            _count: { _all: true },
+          })
+        : [];
+    const policyCountByContactId = new Map(
+      policyCounts.map((item) => [item.contactId, item._count._all]),
+    );
 
     const contactsByStageId = new Map();
     for (const contact of contacts) {
@@ -197,8 +130,14 @@ router.get("/", async (req, res, next) => {
         type: contact.type,
         source: contact.source,
         stageId: contact.stageId,
+        email: contact.email,
+        phone: contact.phone,
+        isStarred: contact.isStarred,
+        tags: contact.tags.map((ct) => ct.tag.name),
         openTaskCount: taskCountByContactId.get(contact.id) || 0,
         lastInteractionAt: latestInteractionByContactId.get(contact.id) || null,
+        interactionCount: interactionCountByContactId.get(contact.id) || 0,
+        policyCount: policyCountByContactId.get(contact.id) || 0,
       });
       contactsByStageId.set(contact.stageId, stageContacts);
     }
@@ -282,23 +221,25 @@ router.get("/unresolved", async (req, res, next) => {
       }
     }
 
-    const unresolved = contacts
-      .filter((c) => {
-        const lastInteraction = latestInteractionByContactId.get(c.id) || null;
-        const lastNextStep = latestNextStepByContactId.get(c.id) || null;
-        const hasFollowUp =
-          (lastInteraction && lastInteraction > c.stageUpdatedAt) ||
-          (lastNextStep && lastNextStep > c.stageUpdatedAt);
-        return !hasFollowUp;
-      })
-      .map((c) => ({
-        id: c.id,
-        fullName: c.fullName,
-        stageName: c.stageId ? stageNameById.get(c.stageId) || null : null,
-        stageUpdatedAt: c.stageUpdatedAt,
-      }));
+    // Build separate lists: contacts lacking an interaction vs. a task after their stage transition.
+    const shaped = contacts.map((c) => ({
+      id: c.id,
+      fullName: c.fullName,
+      stageName: c.stageId ? stageNameById.get(c.stageId) || null : null,
+      stageUpdatedAt: c.stageUpdatedAt,
+    }));
 
-    res.json({ unresolved });
+    const unresolvedInteractions = shaped.filter((c) => {
+      const lastInteraction = latestInteractionByContactId.get(c.id) || null;
+      return !(lastInteraction && lastInteraction > c.stageUpdatedAt);
+    });
+
+    const unresolvedTasks = shaped.filter((c) => {
+      const lastNextStep = latestNextStepByContactId.get(c.id) || null;
+      return !(lastNextStep && lastNextStep > c.stageUpdatedAt);
+    });
+
+    res.json({ unresolvedInteractions, unresolvedTasks });
   } catch (error) {
     next(error); // handled by errorHandler middleware
   }
@@ -560,8 +501,6 @@ router.patch(
 
       const fromStageName = contact.stage?.name || "Unstaged";
       const toStageName = stage.name;
-      assertValidStageTransition({ fromStageName, toStageName });
-
       const transitionedAt = new Date();
 
       const updated = await prisma.contact.update({
@@ -591,12 +530,6 @@ router.patch(
         },
       });
 
-      const followUpSuggestion = buildFollowUpSuggestion({
-        fromStageName,
-        toStageName,
-        contactName: contact.fullName,
-      });
-
       logPipelineEvent("stage_transition_succeeded", {
         contactId,
         contactName: contact.fullName,
@@ -605,13 +538,9 @@ router.patch(
         toStageId: stage.id,
         toStageName,
         transitionedAt: transitionedAt.toISOString(),
-        suggestionDueDateYmd: followUpSuggestion.suggestedDueDateYmd,
       });
 
-      res.json({
-        contact: updated,
-        followUpSuggestion,
-      });
+      res.json({ contact: updated });
     } catch (error) {
       if (error?.statusCode === 422) {
         logPipelineEvent("stage_transition_rejected", {
