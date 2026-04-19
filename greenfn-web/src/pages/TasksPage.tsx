@@ -61,7 +61,6 @@ function TasksPage() {
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
   const dueNowCount = overdue.length + dueToday.length;
-  const totalOpenCount = dueNowCount + upcoming.length;
 
   async function fetchTasks(signal?: AbortSignal) {
     setIsLoading(true);
@@ -181,7 +180,7 @@ function TasksPage() {
           dueNowCount={dueNowCount}
           overdueCount={overdue.length}
           dueTodayCount={dueToday.length}
-          upcomingCount={totalOpenCount}
+          upcomingCount={upcoming.length}
         />
 
         <Tabs defaultValue="list" className="space-y-5">
