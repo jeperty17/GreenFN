@@ -1,8 +1,5 @@
 # GreenFN
 
-## IS3108 Group 1
-Built by: Alloy Chan, Cho Seungmin, Jesper Tay
-
 A modern CRM platform designed for financial advisors to manage client relationships, track interactions, and streamline their sales pipeline.
 
 ## Overview
@@ -172,7 +169,7 @@ The web application will be available at `http://localhost:5173` (Vite default).
 ### Live URLs
 
 - **Frontend**: https://greenfn-web.vercel.app/
-- **Backend API**: greenfn-api-production.up.railway.app
+- **Backend API**: Deployed on Railway (available via environment variables)
 
 ### Frontend Deployment (Vercel)
 
@@ -199,29 +196,6 @@ The backend is deployed on Railway and includes:
 - Set up PostgreSQL plugin for the database
 - Configure environment variables (DATABASE_URL, JWT_SECRET, etc.)
 - Deploy using Railway CLI or GitHub integration
-
-## Available Scripts
-
-### Backend (greenfn/)
-
-- `npm run dev` - Start development server with auto-reload
-- `npm start` - Start production server
-- `npm run server` - Alias for dev
-- `npm run prisma:generate` - Generate Prisma client
-- `npm run prisma:migrate:dev` - Create and apply new migrations
-- `npm run prisma:migrate:status` - Check migration status
-- `npm run prisma:migrate:deploy` - Deploy migrations to database
-- `npm run prisma:db:push` - Push schema changes to database
-- `npm run prisma:seed` - Seed database with initial data
-- `npm run prisma:studio` - Open Prisma Studio for database management
-- `npm run tasks:reminders` - Run task reminder worker
-
-### Frontend (greenfn-web/)
-
-- `npm run dev` - Start Vite development server
-- `npm run build` - Build for production
-- `npm run lint` - Run ESLint
-- `npm run preview` - Preview production build
 
 ## Environment Variables
 
