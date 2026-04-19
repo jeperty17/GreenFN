@@ -1,9 +1,13 @@
 /**
  * Container for the Leads Pipeline page.
- * Owns all state and data fetching; wraps the board in a DndContext for drag-and-drop.
+ * Header (h1 + count + Manage Stages button) sits outside the board container,
+ * matching the Contacts Hub layout pattern.
+ * The board container fills remaining viewport height and scrolls both horizontally
+ * (many stages) and vertically (many cards in a stage).
  * On drag end: optimistically moves the card and opens the transition modal.
- * The PATCH to persist the stage change is only called once the user completes or skips
- * both modal steps — not before. Undo in the modal reverts the card with no API call.
+ * The PATCH to persist the stage change is only called once the user completes or
+ * skips both modal steps — not before. Undo in the modal reverts the card with
+ * a shrink-fade exit animation before the state is reverted.
  */
 
 import {
@@ -12,12 +16,19 @@ import {
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
-import { useEffect, useState } from "react";
+import { type FormEvent, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 import { API_BASE_URL } from "../config/env";
 import { Badge } from "../components/ui/badge";
 import { Button } from "../components/ui/button";
 import { Card, CardContent } from "../components/ui/card";
+import LogInteractionModal from "../components/interactions/LogInteractionModal";
+import type { InteractionFormState } from "../components/interactions/types";
+import PendingTransitionActionsBanner from "../components/pipeline/PendingTransitionActionsBanner";
+import PendingTransitionActionsDialog, {
+  type PendingTransitionActionItem,
+} from "../components/pipeline/PendingTransitionActionsDialog";
 import PipelineBoard, {
   type PipelineStage,
 } from "../components/pipeline/PipelineBoard";
@@ -27,6 +38,8 @@ import StageTransitionModal, {
   type TransitionCompletionPayload,
 } from "../components/pipeline/StageTransitionModal";
 import ManageStagesModal from "../components/pipeline/ManageStagesModal";
+import AddTaskModal from "../components/tasks/AddTaskModal";
+import { CheckSquare, Clock } from "lucide-react";
 
 interface ContactListItem {
   id: string;
@@ -35,24 +48,40 @@ interface ContactListItem {
   source: string | null;
 }
 
-interface FollowUpSuggestion {
-  contactId: string;
-  triggered: boolean;
-  triggerType: string;
-  contactName: string;
-  fromStageName: string;
-  toStageName: string;
-  message: string;
-  suggestedDueDateYmd: string;
-  suggestedTaskTitle: string;
+interface UnresolvedPayload {
+  unresolvedInteractions: PendingTransitionActionItem[];
+  unresolvedTasks: PendingTransitionActionItem[];
 }
 
-function ymdToDateInputValue(ymd: string): string {
-  if (!/^\d{8}$/.test(ymd)) {
-    return "";
-  }
+function currentDateTimeLocal() {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+  return now.toISOString().slice(0, 16);
+}
 
-  return `${ymd.slice(0, 4)}-${ymd.slice(4, 6)}-${ymd.slice(6, 8)}`;
+function isoToDateInputValue(isoDate: string): string {
+  const parsed = new Date(isoDate);
+  if (Number.isNaN(parsed.getTime())) return "";
+  const year = parsed.getFullYear();
+  const month = String(parsed.getMonth() + 1).padStart(2, "0");
+  const day = String(parsed.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function isoToDatetimeLocalValue(isoDate: string): string {
+  const parsed = new Date(isoDate);
+  if (Number.isNaN(parsed.getTime())) return currentDateTimeLocal();
+  parsed.setMinutes(parsed.getMinutes() - parsed.getTimezoneOffset());
+  return parsed.toISOString().slice(0, 16);
+}
+
+function formatDateTimeLabel(value: string): string {
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return "Unknown time";
+  return new Intl.DateTimeFormat("en-SG", {
+    dateStyle: "medium",
+    timeStyle: "short",
+  }).format(parsed);
 }
 
 function daysSinceLabel(lastInteractionAt: string | null): string {
@@ -88,59 +117,62 @@ async function getApiErrorMessage(
     ) {
       return payload.error.details[0].message;
     }
-    if (
-      Array.isArray(payload?.details) &&
-      payload.details.length > 0 &&
-      typeof payload.details[0]?.message === "string"
-    ) {
-      return payload.details[0].message;
-    }
   } catch {
     // ignore parse failures and use fallback
   }
-
   return fallback;
 }
 
 function LeadsPipelinePage() {
+  const navigate = useNavigate();
   const [stages, setStages] = useState<PipelineStage[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
-
-  // Incrementing this triggers a full pipeline re-fetch (used after stage mutations).
   const [refreshTrigger, setRefreshTrigger] = useState(0);
-
-  // Controls the Manage Stages modal.
   const [isManageOpen, setIsManageOpen] = useState(false);
-
-  // The contact currently being dragged — drives the DragOverlay.
   const [activeContact, setActiveContact] = useState<PipelineContact | null>(
     null,
   );
-
-  // Set when a card is dragged to a new column — opens the 2-step transition modal.
   const [pendingTransition, setPendingTransition] =
     useState<PendingTransition | null>(null);
-
-  const [followUpSuggestion, setFollowUpSuggestion] =
-    useState<FollowUpSuggestion | null>(null);
-
-  const [isCreatingSuggestedTask, setIsCreatingSuggestedTask] = useState(false);
-
-  // Snapshot of stages before the optimistic move, so Undo can revert it.
   const [stageSnapshot, setStageSnapshot] = useState<PipelineStage[] | null>(
     null,
   );
+  const [unresolvedInteractions, setUnresolvedInteractions] = useState<
+    PendingTransitionActionItem[]
+  >([]);
+  const [unresolvedTasks, setUnresolvedTasks] = useState<
+    PendingTransitionActionItem[]
+  >([]);
+  const [isOutstandingOpen, setIsOutstandingOpen] = useState(false);
+  const [resolveTaskTarget, setResolveTaskTarget] =
+    useState<PendingTransitionActionItem | null>(null);
+  const [resolveInteractionTarget, setResolveInteractionTarget] =
+    useState<PendingTransitionActionItem | null>(null);
+  const [isSavingResolveInteraction, setIsSavingResolveInteraction] =
+    useState(false);
+  const [resolveInteractionError, setResolveInteractionError] = useState("");
+  const [resolveInteractionFormState, setResolveInteractionFormState] =
+    useState<InteractionFormState>({
+      type: "CALL",
+      interactionDate: currentDateTimeLocal(),
+      title: "",
+      notes: "",
+      aiSummaryDraft: "",
+      aiSummaryModel: null,
+      aiSummarySourceMode: null,
+      aiSummaryGeneratedAt: null,
+    });
 
-  // Ensures newly created contacts without a stage are attached to stage 0.
+  // contactId of the card currently playing the shrink-fade undo exit animation.
+  const [undoingContactId, setUndoingContactId] = useState<string | null>(null);
+
   async function reconcileUnstagedContacts(initialStages: PipelineStage[]) {
     if (initialStages.length === 0) return;
 
     const firstStage = initialStages[0];
     const stagedContactIds = new Set(
-      initialStages.flatMap((stage) =>
-        stage.contacts.map((contact) => contact.id),
-      ),
+      initialStages.flatMap((stage) => stage.contacts.map((c) => c.id)),
     );
 
     const contactsRes = await fetch(
@@ -151,7 +183,7 @@ function LeadsPipelinePage() {
     const contactsPayload: { items: ContactListItem[] } =
       await contactsRes.json();
     const unstagedContacts = contactsPayload.items.filter(
-      (contact) => !stagedContactIds.has(contact.id),
+      (c) => !stagedContactIds.has(c.id),
     );
     if (unstagedContacts.length === 0) return;
 
@@ -181,7 +213,7 @@ function LeadsPipelinePage() {
 
     setStages((prev) => {
       const existingIds = new Set(
-        prev.flatMap((stage) => stage.contacts.map((contact) => contact.id)),
+        prev.flatMap((stage) => stage.contacts.map((c) => c.id)),
       );
 
       return prev.map((stage, index) => {
@@ -195,17 +227,33 @@ function LeadsPipelinePage() {
             type: contact.type,
             source: contact.source,
             stageId: stage.id,
+            email: null,
+            phone: null,
+            isStarred: false,
+            tags: [],
             openTaskCount: 0,
             lastInteractionAt: null,
+            interactionCount: 0,
+            policyCount: 0,
           }));
 
         if (newContacts.length === 0) return stage;
-        return {
-          ...stage,
-          contacts: [...stage.contacts, ...newContacts],
-        };
+        return { ...stage, contacts: [...stage.contacts, ...newContacts] };
       });
     });
+  }
+
+  async function fetchUnresolved(signal: AbortSignal) {
+    const response = await fetch(`${API_BASE_URL}/api/pipeline/unresolved`, {
+      signal,
+    });
+    if (!response.ok) {
+      throw new Error(`Failed to load unresolved actions (${response.status})`);
+    }
+
+    const payload: UnresolvedPayload = await response.json();
+    setUnresolvedInteractions(payload.unresolvedInteractions || []);
+    setUnresolvedTasks(payload.unresolvedTasks || []);
   }
 
   useEffect(() => {
@@ -226,9 +274,16 @@ function LeadsPipelinePage() {
 
         const payload: { stages: PipelineStage[] } = await response.json();
         setStages(payload.stages);
-
-        // Backfills any newly created contacts that do not yet have a stage.
         await reconcileUnstagedContacts(payload.stages);
+
+        try {
+          await fetchUnresolved(abortController.signal);
+        } catch (err) {
+          if ((err as Error).name !== "AbortError") {
+            setUnresolvedInteractions([]);
+            setUnresolvedTasks([]);
+          }
+        }
       } catch (err) {
         if ((err as Error).name === "AbortError") return;
         setErrorMessage((err as Error).message || "Failed to load pipeline");
@@ -238,24 +293,102 @@ function LeadsPipelinePage() {
     }
 
     fetchPipeline();
-
-    return () => {
-      abortController.abort();
-    };
+    return () => abortController.abort();
   }, [refreshTrigger]);
 
   function handleDragStart(event: DragStartEvent) {
-    // Store the contact data so the DragOverlay can render it.
     const contact = event.active.data.current?.contact as PipelineContact;
     setActiveContact(contact);
+  }
+
+  function handleResolveInteraction(item: PendingTransitionActionItem) {
+    setResolveInteractionError("");
+    setResolveInteractionTarget(item);
+    setIsOutstandingOpen(false);
+    setResolveInteractionFormState({
+      type: "CALL",
+      interactionDate: isoToDatetimeLocalValue(item.stageUpdatedAt),
+      title: item.stageName
+        ? `Follow-up after move to ${item.stageName}`
+        : "Follow-up after stage transition",
+      notes: "",
+      aiSummaryDraft: "",
+      aiSummaryModel: null,
+      aiSummarySourceMode: null,
+      aiSummaryGeneratedAt: null,
+    });
+  }
+
+  async function handleResolveInteractionSubmit(
+    event: FormEvent<HTMLFormElement>,
+  ) {
+    event.preventDefault();
+
+    if (!resolveInteractionTarget) {
+      setResolveInteractionError("No unresolved interaction selected");
+      return;
+    }
+    if (!resolveInteractionFormState.interactionDate) {
+      setResolveInteractionError("Interaction date is required");
+      return;
+    }
+    if (!resolveInteractionFormState.title.trim()) {
+      setResolveInteractionError("Interaction title is required");
+      return;
+    }
+    if (!resolveInteractionFormState.notes.trim()) {
+      setResolveInteractionError("Notes are required");
+      return;
+    }
+
+    setResolveInteractionError("");
+    setIsSavingResolveInteraction(true);
+
+    try {
+      const response = await fetch(`${API_BASE_URL}/api/interactions`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contactId: resolveInteractionTarget.id,
+          type: resolveInteractionFormState.type,
+          occurredAt: new Date(
+            resolveInteractionFormState.interactionDate,
+          ).toISOString(),
+          title: resolveInteractionFormState.title.trim(),
+          notes: resolveInteractionFormState.notes.trim(),
+        }),
+      });
+
+      if (!response.ok) {
+        const message = await getApiErrorMessage(
+          response,
+          "Failed to log interaction",
+        );
+        setResolveInteractionError(message);
+        return;
+      }
+
+      toast.success("Interaction logged, unresolved item cleared");
+      setResolveInteractionTarget(null);
+      setRefreshTrigger((t) => t + 1);
+    } catch (error) {
+      if (error instanceof TypeError) {
+        setResolveInteractionError(
+          "Could not reach the API server, ensure backend is running",
+        );
+      } else {
+        setResolveInteractionError("Failed to log interaction");
+      }
+    } finally {
+      setIsSavingResolveInteraction(false);
+    }
   }
 
   function handleDragEnd(event: DragEndEvent) {
     setActiveContact(null);
     const { active, over } = event;
-
-    // Dropped outside any column or onto the same column — nothing to do.
     if (!over) return;
+
     const sourceStageId = active.data.current?.stageId as string;
     const destStageId = over.id as string;
     if (sourceStageId === destStageId) return;
@@ -266,10 +399,8 @@ function LeadsPipelinePage() {
     const destStage = stages.find((s) => s.id === destStageId);
     if (!sourceStage || !destStage) return;
 
-    // Snapshot current state so Undo can revert to it without an API call.
     setStageSnapshot(stages);
 
-    // Optimistically move the card to the destination column immediately.
     setStages((prev) =>
       prev.map((stage) => {
         if (stage.id === sourceStageId) {
@@ -288,7 +419,6 @@ function LeadsPipelinePage() {
       }),
     );
 
-    // Open the modal. The PATCH only fires once the user confirms through both steps.
     setPendingTransition({
       contactId,
       contactName: contact.fullName,
@@ -298,14 +428,10 @@ function LeadsPipelinePage() {
     });
   }
 
-  // Called when the modal is fully completed. Runs all API side effects once.
   async function handleTransitionComplete(
     payload: TransitionCompletionPayload,
   ) {
     const { contactId, destStageId, interaction, nextSteps } = payload;
-
-    // Collect success messages during API calls, then show them one by one
-    // with a delay so toasts appear sequentially instead of in a stack.
     const successMessages: string[] = [];
 
     try {
@@ -318,27 +444,12 @@ function LeadsPipelinePage() {
         },
       );
       if (!res.ok) {
-        const errorMessage = await getApiErrorMessage(
-          res,
-          "Failed to update stage.",
-        );
-        toast.error(errorMessage);
+        const msg = await getApiErrorMessage(res, "Failed to update stage");
+        toast.error(msg);
         throw new Error(`notified:patch:${res.status}`);
       }
-      const responsePayload = await res.json().catch(() => null);
-      const suggestion = responsePayload?.followUpSuggestion;
-      if (suggestion?.triggered) {
-        setFollowUpSuggestion({
-          ...(suggestion as Omit<FollowUpSuggestion, "contactId">),
-          contactId,
-        });
-        toast.success("Follow-up suggestion ready.", {
-          description:
-            suggestion.message ||
-            "A suggested follow-up task is available for this stage change.",
-        });
-      }
-      successMessages.push("Stage updated successfully.");
+      await res.json().catch(() => null);
+      successMessages.push("Stage updated successfully");
 
       if (interaction) {
         const interactionRes = await fetch(`${API_BASE_URL}/api/interactions`, {
@@ -347,48 +458,84 @@ function LeadsPipelinePage() {
           body: JSON.stringify({
             contactId,
             type: interaction.type,
+            occurredAt: interaction.occurredAt,
+            title: interaction.title,
             notes: interaction.notes,
           }),
         });
         if (!interactionRes.ok) {
-          const errorMessage = await getApiErrorMessage(
+          const msg = await getApiErrorMessage(
             interactionRes,
-            "Failed to log interaction.",
+            "Failed to log interaction",
           );
-          toast.error(errorMessage);
+          toast.error(msg);
           throw new Error(`notified:interaction:${interactionRes.status}`);
         }
-        successMessages.push("Interaction logged successfully.");
+
+        const interactionPayload = await interactionRes
+          .json()
+          .catch(() => null);
+        const createdInteractionId =
+          typeof interactionPayload?.item?.id === "string"
+            ? interactionPayload.item.id
+            : "";
+
+        if (interaction.aiSummaryDraft?.trim() && createdInteractionId) {
+          const summaryLinkRes = await fetch(
+            `${API_BASE_URL}/api/interactions/${encodeURIComponent(createdInteractionId)}/summary-link`,
+            {
+              method: "POST",
+              headers: { "Content-Type": "application/json" },
+              body: JSON.stringify({
+                summaryText: interaction.aiSummaryDraft.trim(),
+                model: interaction.aiSummaryModel,
+                sourceMode: interaction.aiSummarySourceMode || "notes",
+                generatedAt:
+                  interaction.aiSummaryGeneratedAt || new Date().toISOString(),
+              }),
+            },
+          );
+
+          if (!summaryLinkRes.ok) {
+            const msg = await getApiErrorMessage(
+              summaryLinkRes,
+              "Interaction saved, AI summary could not be attached",
+            );
+            toast.error(msg);
+            throw new Error(
+              `notified:interaction-summary-link:${summaryLinkRes.status}`,
+            );
+          }
+        }
+
+        successMessages.push("Interaction logged successfully");
       }
 
       if (nextSteps) {
-        for (let index = 0; index < nextSteps.length; index += 1) {
-          const nextStep = nextSteps[index];
+        for (let i = 0; i < nextSteps.length; i++) {
+          const nextStep = nextSteps[i];
           const taskRes = await fetch(`${API_BASE_URL}/api/tasks`, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
             body: JSON.stringify({
               contactId,
               title: nextStep.title,
-              // Backend currently validates description as required.
               description: nextStep.description ?? "-",
               dueAt: nextStep.dueAt,
             }),
           });
           if (!taskRes.ok) {
-            const errorMessage = await getApiErrorMessage(
+            const msg = await getApiErrorMessage(
               taskRes,
-              `Failed to create next step ${index + 1}.`,
+              `Failed to create task ${i + 1}`,
             );
-            toast.error(errorMessage);
+            toast.error(msg);
             throw new Error(`notified:next-step:${taskRes.status}`);
           }
-          successMessages.push(`Next step ${index + 1} created successfully.`);
+          successMessages.push(`Task ${i + 1} created successfully`);
         }
       }
 
-      // Patch the contact's derived fields in local state so the card reflects
-      // the newly-created tasks and logged interaction without a full refetch.
       const taskDelta = nextSteps ? nextSteps.length : 0;
       const newLastInteractionAt = interaction
         ? new Date().toISOString()
@@ -411,130 +558,65 @@ function LeadsPipelinePage() {
       setPendingTransition(null);
       setStageSnapshot(null);
 
-      // Fire success toasts sequentially — each appears after the previous one
-      // has had time to animate in, rather than all stacking at once.
       successMessages.forEach((message, index) => {
         setTimeout(() => toast.success(message), index * 650);
       });
+
+      // Refresh pipeline + unresolved counts so banners reflect the latest transition outcome.
+      setRefreshTrigger((t) => t + 1);
     } catch (error) {
       if (stageSnapshot) setStages(stageSnapshot);
       if (error instanceof TypeError) {
         toast.error(
-          "Could not reach the API server. Ensure backend is running.",
+          "Could not reach the API server, ensure backend is running",
         );
         throw new Error("transition-failed");
       }
       if (!(error instanceof Error && error.message.startsWith("notified:"))) {
         toast.error(
-          "Failed to save the transition. No changes were finalized.",
+          "Failed to save the transition, no changes were finalized",
         );
       }
       throw new Error("transition-failed");
     }
   }
 
-  // Called when the user clicks Undo in the modal.
-  // Reverts the optimistic card move and discards the transition entirely.
+  // Plays a shrink-fade animation on the card in the destination column,
+  // then reverts the optimistic stage move after the animation completes.
   function handleTransitionUndo() {
-    if (stageSnapshot) setStages(stageSnapshot);
+    if (!pendingTransition) return;
+
+    setUndoingContactId(pendingTransition.contactId);
     setPendingTransition(null);
-    setStageSnapshot(null);
+
+    setTimeout(() => {
+      if (stageSnapshot) setStages(stageSnapshot);
+      setStageSnapshot(null);
+      setUndoingContactId(null);
+    }, 350);
   }
 
-  async function handleCreateSuggestedTask() {
-    if (!followUpSuggestion) {
-      return;
-    }
-
-    setIsCreatingSuggestedTask(true);
-
-    try {
-      const response = await fetch(`${API_BASE_URL}/api/tasks`, {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          contactId: followUpSuggestion.contactId,
-          title: followUpSuggestion.suggestedTaskTitle,
-          description: followUpSuggestion.message,
-          dueAt: ymdToDateInputValue(followUpSuggestion.suggestedDueDateYmd),
-        }),
-      });
-
-      if (!response.ok) {
-        const errorMessage = await getApiErrorMessage(
-          response,
-          "Failed to create suggested follow-up task.",
-        );
-        toast.error(errorMessage);
-        return;
-      }
-
-      toast.success("Suggested follow-up task created.");
-      setFollowUpSuggestion(null);
-      setRefreshTrigger((current) => current + 1);
-    } finally {
-      setIsCreatingSuggestedTask(false);
-    }
-  }
-
-  function handleDismissSuggestion() {
-    setFollowUpSuggestion(null);
-  }
+  const hasOutstandingActions =
+    unresolvedInteractions.length > 0 || unresolvedTasks.length > 0;
+  const totalContacts = stages.reduce(
+    (sum, stage) => sum + stage.contacts.length,
+    0,
+  );
+  const showEmptyPipelinePrompt =
+    !isLoading && !errorMessage && totalContacts === 0;
 
   return (
-    <section className="page-section space-y-6">
-      <div className="flex items-start justify-between gap-4">
-        <div>
-          <h2>Leads Pipeline</h2>
-
-          {followUpSuggestion && (
-            <Card className="border-primary/20 bg-primary/5">
-              <CardContent className="space-y-3 p-4">
-                <div className="flex flex-wrap items-center gap-2">
-                  <Badge variant="secondary">Follow-up Suggestion</Badge>
-                  <Badge variant="outline">
-                    Due: {followUpSuggestion.suggestedDueDateYmd}
-                  </Badge>
-                  <Badge variant="outline">
-                    {followUpSuggestion.fromStageName} →{" "}
-                    {followUpSuggestion.toStageName}
-                  </Badge>
-                </div>
-                <div className="space-y-1">
-                  <p className="text-sm font-medium">
-                    {followUpSuggestion.suggestedTaskTitle}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {followUpSuggestion.message}
-                  </p>
-                </div>
-                <div className="flex flex-wrap gap-2">
-                  <Button
-                    type="button"
-                    onClick={handleCreateSuggestedTask}
-                    disabled={isCreatingSuggestedTask}
-                  >
-                    {isCreatingSuggestedTask
-                      ? "Creating…"
-                      : "Create Suggested Task"}
-                  </Button>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    onClick={handleDismissSuggestion}
-                    disabled={isCreatingSuggestedTask}
-                  >
-                    Dismiss
-                  </Button>
-                </div>
-              </CardContent>
-            </Card>
-          )}
-          <p className="field-hint">
-            Contacts grouped by stage. Drag cards between columns to progress
-            leads.
+    // flex-col fills the viewport height minus main's py-6 padding (48px = 3rem)
+    <div className="flex h-[calc(100vh-3rem)] flex-col gap-5">
+      {/* ── Header — outside the board container, matching Contacts Hub pattern ── */}
+      <div className="flex shrink-0 items-end justify-between gap-4">
+        <div className="space-y-1">
+          <h1 className="text-3xl font-semibold leading-tight tracking-tight text-black">
+            Leads Pipeline
+          </h1>
+          <p className="max-w-[65ch] text-base leading-7 text-muted-foreground">
+            Move contacts across stages, then finish pending interactions and
+            tasks
           </p>
         </div>
         <Button
@@ -546,51 +628,86 @@ function LeadsPipelinePage() {
         </Button>
       </div>
 
-      <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <PipelineBoard
-          stages={stages}
-          isLoading={isLoading}
-          errorMessage={errorMessage}
+      {hasOutstandingActions && (
+        <PendingTransitionActionsBanner
+          unresolvedTaskCount={unresolvedTasks.length}
+          unresolvedInteractionCount={unresolvedInteractions.length}
+          onReviewActions={() => setIsOutstandingOpen(true)}
         />
+      )}
 
-        {/* Floating card clone that follows the cursor during drag */}
-        <DragOverlay>
-          {activeContact ? (
-            <Card className="w-64 cursor-grabbing shadow-lg">
-              <CardContent className="space-y-2 p-3">
-                <p className="text-sm font-medium leading-snug">
-                  {activeContact.fullName}
-                </p>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <Badge
-                    variant={
-                      activeContact.type === "CLIENT" ? "default" : "secondary"
-                    }
-                  >
-                    {activeContact.type}
-                  </Badge>
-                  {activeContact.source ? (
-                    <span className="text-xs text-muted-foreground">
-                      {activeContact.source}
-                    </span>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap items-center gap-2">
-                  {activeContact.openTaskCount > 0 && (
-                    <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground ring-1 ring-border">
-                      {activeContact.openTaskCount} task
-                      {activeContact.openTaskCount !== 1 ? "s" : ""}
-                    </span>
-                  )}
-                  <span className="rounded-full bg-muted px-2 py-0.5 text-xs text-muted-foreground ring-1 ring-border">
-                    {daysSinceLabel(activeContact.lastInteractionAt)}
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          ) : null}
-        </DragOverlay>
-      </DndContext>
+      {/* ── Board container — fills remaining height, scrolls both axes ── */}
+      <div
+        className="min-h-0 flex-1 overflow-auto rounded-2xl border border-primary/15 bg-card px-4 py-5"
+        style={{
+          backgroundImage:
+            "linear-gradient(170deg, oklch(0.99 0.006 145) 0%, oklch(0.975 0.012 145) 100%)",
+        }}
+      >
+        {showEmptyPipelinePrompt ? (
+          <Card className="mx-auto mt-8 max-w-xl border-primary/20 bg-[oklch(0.985_0.008_145)] shadow-sm">
+            <CardContent className="space-y-3 p-6 text-center">
+              <p className="text-xl font-semibold leading-tight tracking-tight text-foreground">
+                Your pipeline is empty
+              </p>
+              <p className="mx-auto max-w-[55ch] text-base leading-7 text-muted-foreground">
+                Add your first contact in Contacts Hub to start filling this
+                pipeline
+              </p>
+              <Button
+                type="button"
+                onClick={() => navigate("/?open=add-contact")}
+              >
+                Add Contact
+              </Button>
+            </CardContent>
+          </Card>
+        ) : (
+          <DndContext onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
+            <PipelineBoard
+              stages={stages}
+              isLoading={isLoading}
+              errorMessage={errorMessage}
+              undoingContactId={undoingContactId}
+            />
+
+            {/* Floating card clone that follows the cursor during drag */}
+            <DragOverlay>
+              {activeContact ? (
+                <Card className="w-64 cursor-grabbing border-primary/25 bg-[oklch(0.99_0.006_145)] shadow-lg">
+                  <CardContent className="space-y-2 p-3">
+                    <p className="text-base font-semibold leading-tight tracking-tight">
+                      {activeContact.fullName}
+                    </p>
+                    <div>
+                      <Badge
+                        variant={
+                          activeContact.type === "CLIENT"
+                            ? "default"
+                            : "secondary"
+                        }
+                        className="text-xs"
+                      >
+                        {activeContact.type}
+                      </Badge>
+                    </div>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <span className="flex items-center gap-1 text-xs font-medium tabular-nums text-muted-foreground">
+                        <CheckSquare className="h-3 w-3" />
+                        {activeContact.openTaskCount}
+                      </span>
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <Clock className="h-3 w-3" />
+                        {daysSinceLabel(activeContact.lastInteractionAt)}
+                      </span>
+                    </div>
+                  </CardContent>
+                </Card>
+              ) : null}
+            </DragOverlay>
+          </DndContext>
+        )}
+      </div>
 
       <StageTransitionModal
         pendingTransition={pendingTransition}
@@ -604,7 +721,61 @@ function LeadsPipelinePage() {
         onClose={() => setIsManageOpen(false)}
         onStagesChanged={() => setRefreshTrigger((t) => t + 1)}
       />
-    </section>
+
+      <PendingTransitionActionsDialog
+        open={isOutstandingOpen}
+        onOpenChange={setIsOutstandingOpen}
+        unresolvedTasks={unresolvedTasks}
+        unresolvedInteractions={unresolvedInteractions}
+        formatDateTimeLabel={formatDateTimeLabel}
+        onCreateTask={(item) => {
+          setResolveTaskTarget(item);
+          setIsOutstandingOpen(false);
+        }}
+        onLogInteraction={(item) => {
+          handleResolveInteraction(item);
+        }}
+      />
+
+      <AddTaskModal
+        isOpen={Boolean(resolveTaskTarget)}
+        onClose={() => setResolveTaskTarget(null)}
+        onSuccess={() => {
+          toast.success("Task created, unresolved item cleared");
+          setResolveTaskTarget(null);
+          setRefreshTrigger((t) => t + 1);
+        }}
+        initialContactId={resolveTaskTarget?.id}
+        initialContactName={resolveTaskTarget?.fullName}
+        lockContactSelection
+        initialDueAt={
+          resolveTaskTarget
+            ? isoToDateInputValue(resolveTaskTarget.stageUpdatedAt)
+            : undefined
+        }
+        allowPastDueDate
+      />
+
+      <LogInteractionModal
+        isOpen={Boolean(resolveInteractionTarget)}
+        isSavingInteraction={isSavingResolveInteraction}
+        isLoadingContacts={false}
+        selectedContactId={resolveInteractionTarget?.id || ""}
+        selectedContactName={
+          resolveInteractionTarget?.fullName || "this contact"
+        }
+        formState={resolveInteractionFormState}
+        formError={resolveInteractionError}
+        onClose={() => {
+          if (!isSavingResolveInteraction) {
+            setResolveInteractionTarget(null);
+            setResolveInteractionError("");
+          }
+        }}
+        onSubmit={handleResolveInteractionSubmit}
+        onSetFormState={setResolveInteractionFormState}
+      />
+    </div>
   );
 }
 

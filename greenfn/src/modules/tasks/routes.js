@@ -30,38 +30,30 @@ router.get("/", async (req, res, next) => {
     const advisorId = getAdvisorId(req);
     const isCalendar = req.query.view === "calendar";
 
-    const advisorContacts = await prisma.contact.findMany({
-      where: { advisorId },
-      select: {
-        id: true,
-        fullName: true,
-        stageId: true,
-      },
-    });
-    const contactById = new Map(
-      advisorContacts.map((contact) => [contact.id, contact]),
-    );
-    const contactIds = advisorContacts.map((contact) => contact.id);
-    const stageIds = [
-      ...new Set(
-        advisorContacts.map((contact) => contact.stageId).filter(Boolean),
-      ),
-    ];
-    const stages =
-      stageIds.length > 0
-        ? await prisma.pipelineStage.findMany({
-            where: { id: { in: stageIds } },
-            select: { id: true, name: true },
-          })
-        : [];
-    const stageNameById = new Map(
-      stages.map((stage) => [stage.id, stage.name]),
-    );
-
     const tasks = await prisma.nextStep.findMany({
       where: {
         status: "OPEN",
-        contactId: { in: contactIds.length > 0 ? contactIds : ["__none__"] },
+        contact: {
+          advisorId,
+        },
+      },
+      select: {
+        id: true,
+        title: true,
+        description: true,
+        dueAt: true,
+        status: true,
+        contactId: true,
+        contact: {
+          select: {
+            fullName: true,
+            stage: {
+              select: {
+                name: true,
+              },
+            },
+          },
+        },
       },
       orderBy: { dueAt: "asc" },
     });
@@ -70,12 +62,8 @@ router.get("/", async (req, res, next) => {
     );
 
     const formatTask = (task) => ({
-      contactName:
-        contactById.get(task.contactId)?.fullName || "Unknown Contact",
-      stageName: (() => {
-        const stageId = contactById.get(task.contactId)?.stageId;
-        return stageId ? stageNameById.get(stageId) || null : null;
-      })(),
+      contactName: task.contact.fullName?.trim() || "Unnamed Contact",
+      stageName: task.contact.stage?.name || null,
       id: task.id,
       title: task.title,
       description: task.description,
@@ -124,7 +112,12 @@ router.post(
     const errors = [];
     requiredString(contactId, "contactId", errors);
     requiredString(title, "title", errors);
-    requiredString(description, "description", errors);
+    if (description !== undefined && typeof description !== "string") {
+      errors.push({
+        field: "description",
+        message: "description must be a string",
+      });
+    }
     if (!dueAt) errors.push({ field: "dueAt", message: "dueAt is required" });
     return errors;
   }),
@@ -132,6 +125,8 @@ router.post(
     try {
       const advisorId = getAdvisorId(req);
       const { contactId, title, description, dueAt } = req.body;
+      const safeDescription =
+        typeof description === "string" ? description.trim() : "";
 
       const parsedDueAt = new Date(dueAt);
       if (isNaN(parsedDueAt.getTime())) {
@@ -156,7 +151,7 @@ router.post(
           data: {
             contactId,
             title,
-            description,
+            description: safeDescription,
             dueAt: parsedDueAt,
             status: "OPEN",
           },

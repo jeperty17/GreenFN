@@ -10,7 +10,6 @@
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { API_BASE_URL } from "../config/env";
-import { Button } from "../components/ui/button";
 import {
   Tabs,
   TabsList,
@@ -20,6 +19,8 @@ import {
 import TaskSection from "../components/tasks/TaskSection";
 import AddTaskModal from "../components/tasks/AddTaskModal";
 import CalendarView from "../components/tasks/CalendarView";
+import TasksHeader from "../components/tasks/TasksHeader";
+import TasksMetricsGrid from "../components/tasks/TasksMetricsGrid";
 import type { Task, TaskBucket } from "../components/tasks/types";
 import {
   getTaskDateKey,
@@ -59,6 +60,9 @@ function TasksPage() {
   const [errorMessage, setErrorMessage] = useState("");
   const [isAddModalOpen, setIsAddModalOpen] = useState(false);
 
+  const dueNowCount = overdue.length + dueToday.length;
+  const totalOpenCount = dueNowCount + upcoming.length;
+
   async function fetchTasks(signal?: AbortSignal) {
     setIsLoading(true);
     setErrorMessage("");
@@ -97,11 +101,11 @@ function TasksPage() {
       body: JSON.stringify({ status: "DONE" }),
     });
     if (!res.ok) {
-      toast.error("Failed to mark task as done.");
+      toast.error("Failed to mark task as done");
       return;
     }
     removeTask(taskId);
-    toast.success("Task marked as done.");
+    toast.success("Task marked as done");
   }
 
   async function handleDelete(taskId: string) {
@@ -109,22 +113,28 @@ function TasksPage() {
       method: "DELETE",
     });
     if (!res.ok) {
-      toast.error("Failed to delete task.");
+      toast.error("Failed to delete task");
       return;
     }
     removeTask(taskId);
-    toast.success("Task deleted.");
+    toast.success("Task deleted");
   }
 
-  async function handleReschedule(taskId: string, newDueAt: string) {
-    // newDueAt is a "YYYY-MM-DD" string from the date input
+  async function handleUpdateTask(
+    taskId: string,
+    updates: { title: string; description: string; dueAt: string },
+  ) {
     const res = await fetch(`${API_BASE_URL}/api/tasks/${taskId}`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ dueAt: newDueAt }),
+      body: JSON.stringify({
+        dueAt: updates.dueAt,
+        title: updates.title,
+        description: updates.description,
+      }),
     });
     if (!res.ok) {
-      toast.error("Failed to reschedule task.");
+      toast.error("Failed to update task");
       return;
     }
 
@@ -142,7 +152,12 @@ function TasksPage() {
     removeTask(taskId);
 
     // Place the updated task into its new bucket (or nowhere if beyond window)
-    const updatedTask: Task = updatedApiTask || { ...task, dueAt: newDueAt };
+    const updatedTask: Task = updatedApiTask || {
+      ...task,
+      dueAt: updates.dueAt,
+      title: updates.title,
+      description: updates.description,
+    };
     const newBucket = categorizeDueDate(updatedTask.dueAt);
 
     if (newBucket === "overdue") {
@@ -154,72 +169,98 @@ function TasksPage() {
     }
     // null bucket (beyond window) — task is simply removed from view
 
-    toast.success("Task rescheduled.");
+    toast.success("Task updated");
   }
 
   return (
-    <section className="page-section space-y-6">
-      {/* Page header */}
-      <div className="flex items-start justify-between">
-        <div>
-          <h2>Tasks</h2>
-          <p className="field-hint">All open next steps, grouped by urgency.</p>
-        </div>
-        <Button onClick={() => setIsAddModalOpen(true)}>Add Task</Button>
-      </div>
+    <>
+      <TasksHeader onAddTask={() => setIsAddModalOpen(true)} />
 
-      {/* Tabs */}
-      <Tabs defaultValue="list">
-        <TabsList>
-          <TabsTrigger value="list">List</TabsTrigger>
-          <TabsTrigger value="calendar">Calendar</TabsTrigger>
-        </TabsList>
+      <section className="mt-5 space-y-10 lg:mt-6">
+        <TasksMetricsGrid
+          dueNowCount={dueNowCount}
+          overdueCount={overdue.length}
+          dueTodayCount={dueToday.length}
+          upcomingCount={totalOpenCount}
+        />
 
-        {/* List tab — existing overdue / due today / upcoming view */}
-        <TabsContent value="list">
-          {isLoading ? (
-            <p className="py-16 text-center text-sm text-muted-foreground">
-              Loading tasks…
-            </p>
-          ) : errorMessage ? (
-            <div className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
-              {errorMessage}
-            </div>
-          ) : (
-            <div className="space-y-8">
-              <TaskSection
-                title="Overdue"
-                tasks={overdue}
-                urgency="overdue"
-                onMarkDone={handleMarkDone}
-                onReschedule={handleReschedule}
-                onDelete={handleDelete}
-              />
-              <TaskSection
-                title="Due Today"
-                tasks={dueToday}
-                urgency="dueToday"
-                onMarkDone={handleMarkDone}
-                onReschedule={handleReschedule}
-                onDelete={handleDelete}
-              />
-              <TaskSection
-                title="Upcoming"
-                tasks={upcoming}
-                urgency="upcoming"
-                onMarkDone={handleMarkDone}
-                onReschedule={handleReschedule}
-                onDelete={handleDelete}
-              />
-            </div>
-          )}
-        </TabsContent>
+        <Tabs defaultValue="list" className="space-y-5">
+          <TabsList>
+            <TabsTrigger value="list">List</TabsTrigger>
+            <TabsTrigger value="calendar">Calendar</TabsTrigger>
+          </TabsList>
 
-        {/* Calendar tab — monthly DayPicker view of all OPEN tasks */}
-        <TabsContent value="calendar">
-          <CalendarView />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="list" className="space-y-6">
+            {isLoading ? (
+              <p className="py-16 text-center text-sm text-muted-foreground">
+                Loading tasks…
+              </p>
+            ) : errorMessage ? (
+              <div className="rounded-md border border-destructive/40 bg-destructive/5 px-4 py-3 text-sm text-destructive">
+                {errorMessage}
+              </div>
+            ) : (
+              <>
+                <section className="space-y-4 rounded-2xl border border-[oklch(0.89_0.015_145)] bg-[oklch(0.992_0.004_145)] p-5">
+                  <div className="space-y-1">
+                    <h3 className="text-base font-semibold text-[oklch(0.26_0.04_145)]">
+                      Needs Attention
+                    </h3>
+                    <p className="text-base leading-7 text-muted-foreground">
+                      {dueNowCount === 0
+                        ? "No urgent tasks right now"
+                        : `${dueNowCount} task${dueNowCount === 1 ? "" : "s"} require attention now`}
+                    </p>
+                  </div>
+
+                  <div className="space-y-6">
+                    <TaskSection
+                      title="Overdue"
+                      tasks={overdue}
+                      urgency="overdue"
+                      onMarkDone={handleMarkDone}
+                      onUpdateTask={handleUpdateTask}
+                      onDelete={handleDelete}
+                    />
+                    <TaskSection
+                      title="Due Today"
+                      tasks={dueToday}
+                      urgency="dueToday"
+                      onMarkDone={handleMarkDone}
+                      onUpdateTask={handleUpdateTask}
+                      onDelete={handleDelete}
+                    />
+                  </div>
+                </section>
+
+                <section className="space-y-4 rounded-2xl border border-[oklch(0.89_0.015_145)] bg-[oklch(0.995_0.004_145)] p-5">
+                  <div className="space-y-1">
+                    <h3 className="text-base font-semibold text-[oklch(0.26_0.04_145)]">
+                      Planned Next
+                    </h3>
+                    <p className="text-base leading-7 text-muted-foreground">
+                      Upcoming tasks, so your week stays on track
+                    </p>
+                  </div>
+
+                  <TaskSection
+                    title="Upcoming"
+                    tasks={upcoming}
+                    urgency="upcoming"
+                    onMarkDone={handleMarkDone}
+                    onUpdateTask={handleUpdateTask}
+                    onDelete={handleDelete}
+                  />
+                </section>
+              </>
+            )}
+          </TabsContent>
+
+          <TabsContent value="calendar">
+            <CalendarView />
+          </TabsContent>
+        </Tabs>
+      </section>
 
       <AddTaskModal
         isOpen={isAddModalOpen}
@@ -229,7 +270,7 @@ function TasksPage() {
           fetchTasks();
         }}
       />
-    </section>
+    </>
   );
 }
 

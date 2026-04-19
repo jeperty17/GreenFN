@@ -8,8 +8,14 @@ export interface PipelineContact {
   type: ContactType;
   source: string | null;
   stageId: string;
+  email: string | null;
+  phone: string | null;
+  isStarred: boolean;
+  tags: string[];
   openTaskCount: number;
   lastInteractionAt: string | null;
+  interactionCount: number;
+  policyCount: number;
 }
 
 export interface PipelineStage {

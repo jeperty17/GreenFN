@@ -41,6 +41,7 @@ const STAGES = [
   { id: "seed-stage-005", name: "In Progress", order: 5 },
   { id: "seed-stage-006", name: "Closed Won", order: 6 },
   { id: "seed-stage-007", name: "Closed Lost", order: 7 },
+  { id: "seed-stage-008", name: "Servicing", order: 8 },
 ];
 
 const CONTACTS = [
@@ -66,7 +67,7 @@ const CONTACTS = [
     id: "seed-contact-003",
     fullName: "Carol Wong",
     type: "CLIENT",
-    stageId: "seed-stage-006",
+    stageId: "seed-stage-008",
     email: "carol.wong@example.com",
     phone: "+6591000003",
     source: "Referral",
@@ -82,11 +83,12 @@ async function seed() {
   console.log("Starting seed...");
 
   // ── Advisor user ───────────────────────────────────────────────────────
-  await prisma.user.upsert({
-    where: { id: ADVISOR_ID },
-    update: {},
+  const advisor = await prisma.user.upsert({
+    where: { email: ADVISOR_EMAIL },
+    update: { name: "Seed Advisor" },
     create: { id: ADVISOR_ID, email: ADVISOR_EMAIL, name: "Seed Advisor" },
   });
+  const advisorId = advisor.id;
   console.log("Upserted advisor user.");
 
   // ── Pipeline stages ────────────────────────────────────────────────────
@@ -96,13 +98,13 @@ async function seed() {
       update: {},
       create: {
         id: stage.id,
-        advisorId: ADVISOR_ID,
+        advisorId,
         name: stage.name,
         order: stage.order,
       },
     });
   }
-  console.log("Upserted 7 pipeline stages.");
+  console.log("Upserted 8 pipeline stages.");
 
   // ── Contacts ───────────────────────────────────────────────────────────
   for (const c of CONTACTS) {
@@ -111,7 +113,7 @@ async function seed() {
       update: {},
       create: {
         id: c.id,
-        advisorId: ADVISOR_ID,
+        advisorId,
         fullName: c.fullName,
         type: c.type,
         stageId: c.stageId,
@@ -128,7 +130,7 @@ async function seed() {
     await prisma.tag.upsert({
       where: { id: tag.id },
       update: {},
-      create: { id: tag.id, advisorId: ADVISOR_ID, name: tag.name },
+      create: { id: tag.id, advisorId, name: tag.name },
     });
   }
   console.log("Upserted 2 tags.");
@@ -166,13 +168,16 @@ async function seed() {
   // ── Sample next-step task ──────────────────────────────────────────────
   await prisma.nextStep.upsert({
     where: { id: "seed-nextstep-001" },
-    update: {},
+    update: {
+      dueAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
+    },
     create: {
       id: "seed-nextstep-001",
       contactId: "seed-contact-002",
       title: "Send follow-up proposal",
       description:
         "Email Bob the term life proposal discussed during the call.",
+      dueAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000),
       status: "OPEN",
     },
   });
@@ -180,7 +185,7 @@ async function seed() {
 
   console.log("\nSeed complete.");
   console.log("  Advisor : seed-user-001 (advisor.seed@greenfn.local)");
-  console.log("  Stages  : 7");
+  console.log("  Stages  : 8");
   console.log("  Contacts: 3  (Alice, Bob, Carol)");
   console.log("  Tags    : 2  (High Priority, Follow Up)");
   console.log("  Interactions: 1");

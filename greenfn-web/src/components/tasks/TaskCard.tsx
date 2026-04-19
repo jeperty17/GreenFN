@@ -1,23 +1,24 @@
 /**
- * Individual task card for the Tasks page.
- * Shows contact name, task title, formatted due date, and pipeline stage.
- * The urgency prop drives colour scheme: red for overdue, amber for due today, neutral for upcoming.
- * Mark Done removes the card on API success. Reschedule reveals an inline date input.
+ * Individual task row for the Tasks page.
+ * Uses a compact to-do list layout with a clear primary completion action,
+ * concise metadata, and inline editing for date/title/description.
  */
 
 import { useState } from "react";
-import { Trash2 } from "lucide-react";
+import { Check, Pencil, Trash2 } from "lucide-react";
 import { Button } from "../ui/button";
 import { Badge } from "../ui/badge";
-import { Card, CardContent } from "../ui/card";
 import type { Task, TaskBucket } from "./types";
-import { formatTaskDate } from "./timezone";
+import { formatTaskDate, getTaskDateKey } from "./timezone";
 
 interface TaskCardProps {
   task: Task;
   urgency: TaskBucket;
   onMarkDone: (taskId: string) => Promise<void>;
-  onReschedule: (taskId: string, newDueAt: string) => Promise<void>;
+  onUpdateTask: (
+    taskId: string,
+    updates: { title: string; description: string; dueAt: string },
+  ) => Promise<void>;
   onDelete: (taskId: string) => Promise<void>;
 }
 
@@ -29,30 +30,35 @@ function TaskCard({
   task,
   urgency,
   onMarkDone,
-  onReschedule,
+  onUpdateTask,
   onDelete,
 }: TaskCardProps) {
+  const normalizedDescription = task.description?.trim() ?? "";
+  const hasVisibleDescription =
+    Boolean(normalizedDescription) &&
+    normalizedDescription !== "-" &&
+    normalizedDescription !== "—";
+
   const [isMarkingDone, setIsMarkingDone] = useState(false);
-  const [showReschedule, setShowReschedule] = useState(false);
-  const [rescheduleDate, setRescheduleDate] = useState("");
-  const [isRescheduling, setIsRescheduling] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editTitle, setEditTitle] = useState(task.title);
+  const [editDescription, setEditDescription] = useState(
+    hasVisibleDescription ? normalizedDescription : "",
+  );
+  const [editDueAt, setEditDueAt] = useState(getTaskDateKey(task.dueAt));
+  const [editError, setEditError] = useState("");
+  const [isSavingEdit, setIsSavingEdit] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
 
-  // Card border/background colour by urgency
-  const cardClass =
-    urgency === "overdue"
-      ? "border-red-200 bg-red-50 dark:border-red-900 dark:bg-red-950/30"
-      : urgency === "dueToday"
-        ? "border-amber-200 bg-amber-50 dark:border-amber-900 dark:bg-amber-950/30"
-        : "";
-
-  // Due date text colour by urgency
   const dateClass =
     urgency === "overdue"
-      ? "text-red-600 dark:text-red-400"
+      ? "text-red-700"
       : urgency === "dueToday"
-        ? "text-amber-600 dark:text-amber-400"
-        : "text-muted-foreground";
+        ? "text-amber-700"
+        : "text-[oklch(0.35_0.07_145)]";
+
+  const doneButtonClass =
+    "border-[oklch(0.5_0.14_145)] bg-[oklch(0.5_0.14_145)] text-[oklch(0.99_0.004_145)] hover:bg-[oklch(0.44_0.15_145)]";
 
   async function handleMarkDone() {
     setIsMarkingDone(true);
@@ -63,16 +69,32 @@ function TaskCard({
     }
   }
 
-  async function handleRescheduleSubmit() {
-    if (!rescheduleDate) return;
-    setIsRescheduling(true);
-    try {
-      await onReschedule(task.id, rescheduleDate);
-      setShowReschedule(false);
-      setRescheduleDate("");
-    } finally {
-      setIsRescheduling(false);
+  async function handleSaveEdit() {
+    if (!editTitle.trim() || !editDescription.trim() || !editDueAt) {
+      setEditError("Title, description, and due date are required");
+      return;
     }
+
+    setIsSavingEdit(true);
+    setEditError("");
+    try {
+      await onUpdateTask(task.id, {
+        title: editTitle.trim(),
+        description: editDescription.trim(),
+        dueAt: editDueAt,
+      });
+      setIsEditing(false);
+    } finally {
+      setIsSavingEdit(false);
+    }
+  }
+
+  function handleStartEdit() {
+    setEditTitle(task.title);
+    setEditDescription(hasVisibleDescription ? normalizedDescription : "");
+    setEditDueAt(getTaskDateKey(task.dueAt));
+    setEditError("");
+    setIsEditing(true);
   }
 
   async function handleDelete() {
@@ -85,89 +107,158 @@ function TaskCard({
   }
 
   return (
-    <Card className={cardClass}>
-      <CardContent className="p-4 space-y-3">
-        {/* Top row: task title + date/stage */}
-        <div className="flex items-start justify-between gap-3">
-          <div className="min-w-0 space-y-0.5">
-            <p className="text-sm font-medium leading-snug">{task.title}</p>
-            <p className="text-xs text-muted-foreground truncate">
-              {task.contactName}
+    <div className="space-y-2.5">
+      <div className="flex items-start gap-3 rounded-xl p-1.5 transition duration-200 ease-out hover:bg-[oklch(0.98_0.01_145)]">
+        <Button
+          type="button"
+          variant="ghost"
+          size="icon"
+          onClick={handleMarkDone}
+          disabled={isMarkingDone || isDeleting}
+          className={`mt-0.5 h-7 w-7 shrink-0 rounded-full border transition-transform duration-200 ease-out hover:scale-[1.04] ${doneButtonClass}`}
+          title="Mark task as done"
+          aria-label="Mark task as done"
+        >
+          {isMarkingDone ? (
+            <span className="text-xs">…</span>
+          ) : (
+            <Check className="h-4 w-4" />
+          )}
+        </Button>
+
+        <div className="min-w-0 flex-1 space-y-1">
+          <p className="text-base font-semibold leading-6 tracking-[-0.01em] text-[oklch(0.2_0.04_145)]">
+            {task.title}
+          </p>
+          {hasVisibleDescription ? (
+            <p className="line-clamp-2 text-sm leading-6 text-[oklch(0.36_0.04_145)]">
+              {normalizedDescription}
             </p>
-          </div>
-          <div className="flex flex-col items-end gap-1 shrink-0">
-            <span className={`text-xs font-medium ${dateClass}`}>
+          ) : null}
+          <p className="truncate text-sm font-medium leading-6 text-[oklch(0.24_0.04_145)]">
+            {task.contactName}
+          </p>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <span className={`text-sm font-medium leading-6 ${dateClass}`}>
               {formatDate(task.dueAt)}
             </span>
             {task.stageName ? (
-              <Badge variant="secondary" className="text-xs">
+              <Badge variant="secondary" className="h-5 px-2 text-[11px]">
                 {task.stageName}
               </Badge>
             ) : null}
           </div>
         </div>
 
-        {/* Reschedule inline input or action buttons */}
-        {showReschedule ? (
-          <div className="flex items-center gap-2">
-            <input
-              type="date"
-              value={rescheduleDate}
-              onChange={(e) => setRescheduleDate(e.target.value)}
-              className="flex-1 rounded-md border border-input bg-background px-3 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-            <Button
-              size="sm"
-              onClick={handleRescheduleSubmit}
-              disabled={isRescheduling || !rescheduleDate}
-            >
-              {isRescheduling ? "Saving…" : "Save"}
-            </Button>
+        {!isEditing ? (
+          <div className="flex items-center gap-1.5">
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => {
-                setShowReschedule(false);
-                setRescheduleDate("");
-              }}
-              disabled={isRescheduling}
+              onClick={handleStartEdit}
+              disabled={isMarkingDone || isDeleting}
+              className="h-7 px-2 text-sm font-medium text-[oklch(0.36_0.06_145)] hover:bg-[oklch(0.95_0.01_145)] hover:text-[oklch(0.3_0.08_145)]"
+              title="Edit task"
+              aria-label="Edit task"
             >
-              Cancel
+              <Pencil className="h-3.5 w-3.5" />
             </Button>
-          </div>
-        ) : (
-          <div className="flex items-center gap-2">
             <Button
               size="sm"
               variant="ghost"
               onClick={handleDelete}
               disabled={isMarkingDone || isDeleting}
-              className="text-red-600 hover:text-red-700 hover:bg-red-50"
+              className="h-7 px-2 text-red-600 hover:bg-red-50 hover:text-red-700"
               title="Delete task"
               aria-label="Delete task"
             >
-              <Trash2 className="h-4 w-4" />
+              {isDeleting ? (
+                <span className="text-xs">…</span>
+              ) : (
+                <Trash2 className="h-3.5 w-3.5" />
+              )}
             </Button>
+          </div>
+        ) : null}
+      </div>
+
+      {isEditing ? (
+        <div className="space-y-2 pl-10">
+          <div className="space-y-1">
+            <label
+              htmlFor={`task-edit-title-${task.id}`}
+              className="text-sm font-medium text-[oklch(0.34_0.05_145)]"
+            >
+              Task Name
+            </label>
+          </div>
+          <input
+            id={`task-edit-title-${task.id}`}
+            type="text"
+            value={editTitle}
+            onChange={(e) => setEditTitle(e.target.value)}
+            placeholder="Task title"
+            className="h-8 w-full rounded-md border border-input bg-background px-2.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+          <div className="space-y-1">
+            <label
+              htmlFor={`task-edit-description-${task.id}`}
+              className="text-sm font-medium text-[oklch(0.34_0.05_145)]"
+            >
+              Task Description
+            </label>
+          </div>
+          <textarea
+            id={`task-edit-description-${task.id}`}
+            value={editDescription}
+            onChange={(e) => setEditDescription(e.target.value)}
+            placeholder="Task description"
+            rows={2}
+            className="w-full resize-none rounded-md border border-input bg-background px-2.5 py-1.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+          />
+          <div className="flex items-center gap-2">
+            <div className="flex-1 space-y-1">
+              <label
+                htmlFor={`task-edit-dueAt-${task.id}`}
+                className="text-sm font-medium text-[oklch(0.34_0.05_145)]"
+              >
+                Due Date
+              </label>
+              <input
+                id={`task-edit-dueAt-${task.id}`}
+                type="date"
+                value={editDueAt}
+                onChange={(e) => setEditDueAt(e.target.value)}
+                className="h-8 flex-1 rounded-md border border-input bg-background px-2.5 text-sm shadow-sm focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+            </div>
             <Button
               size="sm"
-              variant="outline"
-              onClick={handleMarkDone}
-              disabled={isMarkingDone || isDeleting}
+              onClick={handleSaveEdit}
+              disabled={isSavingEdit}
+              className="mt-5 h-8"
             >
-              {isMarkingDone ? "Saving…" : "Mark Done"}
+              {isSavingEdit ? "Saving…" : "Save"}
             </Button>
             <Button
               size="sm"
               variant="ghost"
-              onClick={() => setShowReschedule(true)}
-              disabled={isMarkingDone || isDeleting}
+              onClick={() => {
+                setIsEditing(false);
+                setEditError("");
+              }}
+              disabled={isSavingEdit}
+              className="mt-5 h-8"
             >
-              Reschedule
+              Cancel
             </Button>
           </div>
-        )}
-      </CardContent>
-    </Card>
+          {editError ? (
+            <p className="text-sm text-red-700">{editError}</p>
+          ) : null}
+        </div>
+      ) : null}
+    </div>
   );
 }
 
