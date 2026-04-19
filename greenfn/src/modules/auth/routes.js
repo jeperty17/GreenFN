@@ -5,6 +5,7 @@ const { issueAccessToken } = require("../../lib/jwtAuth");
 const { requireAuth } = require("../../middleware/requireAuth");
 const { AUTH_LOGIN_EMAIL, AUTH_LOGIN_PASSWORD } = require("../../config/env");
 const prisma = require("../../lib/prisma");
+const { provisionUser } = require("../../lib/provisionUser");
 
 const router = express.Router();
 
@@ -92,6 +93,8 @@ async function ensureAdvisorForEnvLogin(email) {
     },
     select: { id: true, email: true, name: true },
   });
+
+  await provisionUser(createdAdvisor.id);
 
   return {
     id: createdAdvisor.id,
@@ -198,6 +201,8 @@ router.post("/signup", validateBody(validateSignup), async (req, res, next) => {
       },
       select: { id: true, email: true, name: true },
     });
+
+    await provisionUser(createdUser.id);
 
     res.status(201).json(await issueTokenForAdvisor(createdUser));
   } catch (error) {
