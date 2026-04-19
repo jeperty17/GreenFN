@@ -2,36 +2,43 @@
 
 A modern CRM platform designed for financial advisors to manage client relationships, track interactions, and streamline their sales pipeline.
 
-## Overview
+## What is GreenFN?
 
-GreenFN is a full-stack web application that helps financial advisors organize and manage their client relationships efficiently. It provides tools for contact management, interaction tracking, pipeline management, task scheduling, and AI-powered summaries.
+GreenFN helps financial advisors stay organised and efficient by centralising:
+
+- Client contact management  
+- Interaction tracking  
+- Sales pipeline management  
+- Task and follow-up reminders  
+- AI-generated summaries of client interactions  
+
+It’s designed to reduce manual admin work so advisors can focus on closing deals.
+
+## Project Team
+
+**IS3108 Group 1**
+
+Members: Alloy Chan, Cho Seungmin, Jesper Tay  
+
+## Live App (Deployment)
+
+- **Frontend**: https://greenfn-web.vercel.app/  
+- **Backend**: https://greenfn-api-production.up.railway.app (only contains JSON responses, primarily intended to support frontend application only)
 
 ## Tech Stack
 
-### Backend
+**Frontend**
+- React (Vite + TypeScript)
+- Radix UI
+- Tailwind CSS + ShadCN
 
-- **Runtime**: Node.js
-- **Framework**: Express.js
-- **Database**: PostgreSQL
-- **ORM**: Prisma
-- **Authentication**: JWT (JSON Web Tokens)
-- **Security**: bcryptjs for password hashing
-- **AI Integration**: Google Generative AI
-- **Database Adapter**: @prisma/adapter-pg
+**Backend**
+- Node.js + Express
+- Supabase (PostgresQL + Prisma)
 
-### Frontend
-
-- **Framework**: React 19
-- **Build Tool**: Vite
-- **Language**: TypeScript
-- **Styling**: Tailwind CSS
-- **UI Components**: Radix UI
-- **Forms**: React Hook Form + Zod validation
-- **Routing**: React Router v7
-- **Drag & Drop**: dnd-kit
-- **Notifications**: Sonner
-- **Themes**: next-themes
-- **Deployment**: Vercel
+**Other**
+- JWT Authentication  
+- Google Generative AI (for summaries)  
 
 ### Deployment
 
@@ -82,129 +89,79 @@ supabase/                 # Supabase configuration
 - **Contact Management**: Create and manage client contacts with detailed information
 - **Sales Pipeline**: Organize contacts into customizable pipeline stages
 - **Interaction Tracking**: Record all communications and interactions with clients
-- **AI-Powered Summaries**: Automatic summaries of client interactions using Google Generative AI
+- **AI-Powered Summaries**: Generate structured summaries of client interactions using Gemini (Do note there is a limit of 20 requests per day because we are using the free tier from Google AI Studio)
 - **Task Management**: Create tasks and set reminders for follow-ups
 - **User Authentication**: Secure JWT-based authentication system
-- **Message Templates**: Pre-defined templates for common messages
-- **Activity Logs**: Track changes and activities on contacts
-- **Responsive UI**: Modern, intuitive interface with dark/light theme support
 
 ## Getting Started
 
 ### Prerequisites
+- Node.js
+- Docker Desktop (for local Supabase)
 
-- Node.js (v18 or higher)
-- PostgreSQL database
-- npm or yarn package manager
-
-### Installation
-
-1. **Clone the repository**
-
-   ```bash
-   git clone <repository-url>
+1. Clone the repository
+```bash
+   git clone 
    cd GreenFN
-   ```
+```
 
-2. **Install dependencies**
-
-   ```bash
+2. Install dependencies
+```bash
+   # From project root
    npm install
-   # or
-   yarn install
-   ```
 
-3. **Set up environment variables**
-
-   Copy `.env.example` to `.env` in the `greenfn` directory:
-
-   ```bash
-   cp greenfn/.env.example greenfn/.env
-   ```
-
-   Update the `.env` file with your configuration:
-   - Database connection string
-   - JWT secret
-   - Google Generative AI API key
-   - CORS settings
-
-4. **Set up the database**
-
-   ```bash
+   # Backend
    cd greenfn
-   npm run prisma:migrate:deploy
-   ```
+   npm install
 
-5. **Seed the database (optional)**
-   ```bash
+   # Frontend
+   cd ../greenfn-web
+   npm install
+```
+
+3. Set up backend environment variables
+```bash
+   cp greenfn/.env.example greenfn/.env
+```
+   Fill in the values in `greenfn/.env` — see the Environment Variables section below.
+
+4. Start Docker Desktop, then start local Supabase (from project root)
+```bash
+   npx supabase start
+```
+
+5. Apply database migrations and seed (from greenfn/)
+```bash
+   cd greenfn
+   npm run prisma:migrate:dev
    npm run prisma:seed
-   ```
-
-## Running the Application (Development)
-
-### Backend
-
-Start the development server:
-
-```bash
-cd greenfn
-npm run dev
 ```
 
-The API server will start on `http://localhost:3000` (or your configured port).
-
-### Frontend
-
-Start the development server:
-
+6. Start the backend (from greenfn/)
 ```bash
-cd greenfn-web
-npm run dev
+   npm run dev
+```
+   Runs at http://localhost:3000
+
+7. Start the frontend in a separate terminal (from greenfn-web/)
+```bash
+   cd greenfn-web
+   npm run dev
+```
+   Runs at http://localhost:5173
+
+8. To stop local Supabase when done (from project root)
+```bash
+   npx supabase stop
 ```
 
-The web application will be available at `http://localhost:5173` (Vite default).
-
-## Deployment
-
-### Live URLs
-
-- **Frontend**: https://greenfn-web.vercel.app/
-- **Backend API**: Deployed on Railway (available via environment variables)
-
-### Frontend Deployment (Vercel)
-
-The frontend is automatically deployed to Vercel on every push to the main branch:
-
-1. Connect your GitHub repository to Vercel
-2. Configure the build settings:
-   - **Framework Preset**: Vite
-   - **Build Command**: `npm run build`
-   - **Output Directory**: `dist`
-   - **Environment Variables**: Add `VITE_API_BASE_URL` pointing to your Railway backend
-
-### Backend Deployment (Railway)
-
-The backend is deployed on Railway and includes:
-
-1. PostgreSQL database provisioning
-2. Node.js server runtime
-3. Automatic deployments on push to main branch
-
-**Railway Setup**:
-
-- Connect your GitHub repository to Railway
-- Set up PostgreSQL plugin for the database
-- Configure environment variables (DATABASE_URL, JWT_SECRET, etc.)
-- Deploy using Railway CLI or GitHub integration
-
-## Environment Variables
-
-Key environment variables required:
-
-- `DATABASE_URL` - PostgreSQL connection string
-- `NODE_ENV` - Environment (development/production)
-- `JWT_SECRET` - Secret key for JWT signing
-- `API_BASE_PATH` - API base path (e.g., `/api`)
-- `GOOGLE_API_KEY` - Google Generative AI API key
-- `CORS_ALLOWED_ORIGINS` - Comma-separated list of allowed origins
-- `FRONTEND_URL` - Frontend application URL
+## Environment Variables (greenfn/.env)
+```
+PORT=3000
+NODE_ENV=development
+DATABASE_URL=         # Supabase pooled connection URL (from supabase start output)
+DIRECT_URL=           # Supabase direct connection URL (from supabase start output)
+JWT_SECRET=           # Any secure random string
+GEMINI_API_KEY=       # Google Gemini API key (get free key from Google AI Studio)
+CORS_ALLOWED_ORIGINS=http://localhost:5173
+```
