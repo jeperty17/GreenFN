@@ -28,6 +28,38 @@ type SkipState = {
   capturedAt: string;
 };
 
+function getFriendlySummaryErrorMessage(responseStatus: number): string {
+  if (responseStatus === 400) {
+    return "Please check the summary input and try again.";
+  }
+
+  if (responseStatus === 401 || responseStatus === 403) {
+    return "You are not allowed to generate a summary right now.";
+  }
+
+  if (responseStatus === 404) {
+    return "The selected contact or record could not be found.";
+  }
+
+  if (responseStatus === 413) {
+    return "The input is too long. Please shorten it and try again.";
+  }
+
+  if (responseStatus === 422) {
+    return "The input was blocked by a safety check. Please revise it and try again.";
+  }
+
+  if (responseStatus === 429) {
+    return "Too many requests. Please wait a moment and try again.";
+  }
+
+  if (responseStatus >= 500) {
+    return "AI summary generation is temporarily unavailable. Please try again later.";
+  }
+
+  return "Failed to generate summary. Please try again.";
+}
+
 function buildSummaryPreviewFromFormData(formData: FormState): string {
   if (formData.mode === "structured") {
     const { keyPoints, clientNeeds, nextSteps, followUpAction } =
@@ -162,11 +194,7 @@ function AISummaryPage() {
       });
 
       if (!response.ok) {
-        const errorPayload = await response.json().catch(() => null);
-        const apiErrorMessage = errorPayload?.error?.message;
-        throw new Error(
-          apiErrorMessage || `Failed to generate summary (${response.status})`,
-        );
+        throw new Error(getFriendlySummaryErrorMessage(response.status));
       }
 
       const payload = await response.json();
@@ -186,7 +214,8 @@ function AISummaryPage() {
       });
     } catch (error) {
       setPreviewError(
-        (error as Error).message || "Failed to generate summary.",
+        (error as Error).message ||
+          "AI summary generation is temporarily unavailable. Please try again later.",
       );
       setSummaryPreview(null);
     } finally {
@@ -214,11 +243,7 @@ function AISummaryPage() {
     }
 
     setPreviewError("");
-    setSaveSuccessMessage(
-      summaryPreview.summaryId
-        ? `Summary is already saved in database (ID: ${summaryPreview.summaryId}).`
-        : "Summary generated, but no persisted summary ID was returned.",
-    );
+    setSaveSuccessMessage("Summary saved successfully.");
   }
 
   return (
@@ -226,9 +251,8 @@ function AISummaryPage() {
       <header className="space-y-2">
         <h2>AI Interaction Summaries</h2>
         <p className="text-sm text-muted-foreground">
-          Convert your interactions into concise, structured summaries. Choose
-          your input method and let AI organize the key details for your
-          records.
+          Convert your interactions into concise bullet summaries. Choose your
+          input method and let AI organize the key details for your records.
         </p>
       </header>
 

@@ -52,6 +52,14 @@ Track all completed changes made in this repository, now and in the future, incl
 - FILES_CHANGED: TASKS.md
 - CHANGE_SUMMARY: Created `TASKS.md` with `SETUP` and `IMPLEMENTATION` sections, including feature-specific `FRONTEND`, `BACKEND`, `DB`, and `DEPLOYMENT` subtasks.
 
+### LOG-0090
+
+- TASK: AI Interaction Summaries
+- SUBTASK: Simplify summary output and sanitize AI error display
+- COMPLETED_AT: 2026-04-19 12:07:22 +0800
+- FILES_CHANGED: greenfn/src/modules/ai/service.js, greenfn/src/modules/ai/routes.js, greenfn-web/src/pages/AISummaryPage.tsx, REVIEW/AI_INTERACTION_SUMMARIES.md, LOG.md
+- CHANGE_SUMMARY: Replaced the AI summary contract with a hidden flat-bullet prompt that prioritizes dates, tasks, and next steps while forbidding backend/internal identifiers, converted the local fallback summary to the same bullet-only style, and changed the AI Summary page to show friendly, non-raw errors and a non-sensitive save confirmation message.
+
 ### LOG-0046
 
 - TASK: Tooling Maintenance
