@@ -1,5 +1,8 @@
 # GreenFN
 
+## IS3108 Group 1
+Built by: Alloy Chan, Cho Seungmin, Jesper Tay
+
 A modern CRM platform designed for financial advisors to manage client relationships, track interactions, and streamline their sales pipeline.
 
 ## Overview
@@ -169,7 +172,7 @@ The web application will be available at `http://localhost:5173` (Vite default).
 ### Live URLs
 
 - **Frontend**: https://greenfn-web.vercel.app/
-- **Backend API**: Deployed on Railway (available via environment variables)
+- **Backend API**: greenfn-api-production.up.railway.app
 
 ### Frontend Deployment (Vercel)
 
