@@ -50,6 +50,15 @@ Track all completed changes made in this repository, now and in the future, incl
 - SUBTASK: Create implementation task breakdown file
 - COMPLETED_AT: 2026-03-03 20:24:15 +08
 - FILES_CHANGED: TASKS.md
+
+### LOG-0106
+
+- TASK: Deployment Reliability
+- SUBTASK: Fail fast when Vercel API base URL is missing or invalid
+- COMPLETED_AT: 2026-04-19 17:26:19 +0800
+- FILES_CHANGED: greenfn-web/src/config/env.ts, LOG.md
+- CHANGE_SUMMARY: Replaced the frontend localhost fallback with explicit VITE_API_BASE_URL validation so production builds surface a clear configuration error instead of silently pointing auth requests at the wrong backend.
+
 - CHANGE_SUMMARY: Created `TASKS.md` with `SETUP` and `IMPLEMENTATION` sections, including feature-specific `FRONTEND`, `BACKEND`, `DB`, and `DEPLOYMENT` subtasks.
 
 ### LOG-0002
@@ -58,6 +67,7 @@ Track all completed changes made in this repository, now and in the future, incl
 - SUBTASK: Reapply TypeScript deprecation-safe tsconfig settings after branch/config drift
 - COMPLETED_AT: 2026-04-14 10:08:46 +08
 - FILES_CHANGED: greenfn/tsconfig.json, greenfn-web/tsconfig.app.json, LOG.md
+
 - CHANGE_SUMMARY: Reapplied TypeScript deprecation-safe configuration by updating backend `module/moduleResolution` to `Node16/node16` and restoring `ignoreDeprecations: "6.0"` in frontend app tsconfig; verified all tracked tsconfig files report no diagnostics.
 
 ### LOG-0003
