@@ -358,8 +358,21 @@ function validateOutputLength(text, maxChars, outputType) {
   }
 }
 
+function normalizeProvider(value) {
+  const normalized = String(value || "")
+    .trim()
+    .toLowerCase();
+
+  if (normalized === "gemini" || normalized === "openai") {
+    return "google";
+  }
+
+  return normalized;
+}
+
 function createAIService(config = {}) {
   const options = { ...defaultOptions, ...config };
+  options.provider = normalizeProvider(options.provider);
 
   if (options.provider !== "google" && options.provider !== "gemini") {
     throw httpError(400, "Unsupported AI provider configured", {

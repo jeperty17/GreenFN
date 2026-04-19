@@ -6,7 +6,7 @@ This task configured deployment environment variables across backend (Railway) a
 
 - Railway service: `greenfn-api`
 - Vercel project: `greenfn-web`
-- Backend vars configured: database, runtime, AI provider/model, and `OPENAI_API_KEY`
+- Backend vars configured: database, runtime, AI provider/model, and `GEMINI_API_KEY`
 - Frontend var configured: `VITE_API_BASE_URL` (Production + Development)
 
 ## Reproducible Run / Validation Commands
@@ -30,7 +30,7 @@ npx vercel env list
 
 - Railway variable names include:
   - `DATABASE_URL`, `DIRECT_URL`, `NODE_ENV`, `PORT`
-  - `AI_PROVIDER`, `AI_PRIMARY_MODEL`, `AI_FALLBACK_MODEL`, `OPENAI_API_KEY`
+  - `AI_PROVIDER`, `AI_PRIMARY_MODEL`, `AI_FALLBACK_MODEL`, `GEMINI_API_KEY`
 - Vercel contains encrypted `VITE_API_BASE_URL` entries for Production and Development.
 - Preview-specific Vercel env target is pending Git repository connection in Vercel.
 

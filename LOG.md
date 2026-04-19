@@ -782,8 +782,24 @@ Track all completed changes made in this repository, now and in the future, incl
 
 ### LOG-0093
 
+- TASK: AI Provider Runtime Stability
+- SUBTASK: Prevent Railway boot crash from legacy AI_PROVIDER values
+- COMPLETED_AT: 2026-04-19 15:31:17 +0800
+- FILES_CHANGED: greenfn/src/config/env.js, greenfn/src/modules/ai/service.js, LOG.md
+- CHANGE_SUMMARY: Aligned backend AI env defaults to Gemini (`google` + Gemini model defaults), added `requireGeminiApiKey` and `GEMINI_API_KEY` exports for service compatibility, and introduced backward-compatible provider normalization that treats legacy `AI_PROVIDER=openai`/`gemini` as `google` so app startup no longer crashes on provider string mismatch in Railway.
+
+### LOG-0093
+
 - TASK: AI Interaction Summaries
 - SUBTASK: Auto-create dated tasks from AI summary next-step actions during interaction logging
 - COMPLETED_AT: 2026-04-19 15:00:50 +0800
 - FILES_CHANGED: greenfn/src/modules/interactions/routes.js, LOG.md
 - CHANGE_SUMMARY: Enhanced `POST /api/interactions/:interactionId/summary-link` to extract actionable next steps from AI summary text and auto-create `NextStep` tasks when a due date can be inferred (including formats like `27th April`, `YYYY-MM-DD`, weekdays, and `next Monday`), with dedupe checks and response metadata containing `autoCreatedTasks`.
+
+### LOG-0094
+
+- TASK: AI Provider Secret Cleanup
+- SUBTASK: Remove active OPENAI_API_KEY references and align docs to Gemini key usage
+- COMPLETED_AT: 2026-04-19 15:35:40 +0800
+- FILES_CHANGED: greenfn/src/config/env.js, docs/ai-secret-handling.md, docs/ai-service-wrapper.md, REVIEW/AI_SECRET_HANDLING.md, REVIEW/DEPLOYMENT_ENV_VARS.md, supabase/config.toml, LOG.md
+- CHANGE_SUMMARY: Removed runtime `OPENAI_API_KEY` and `requireOpenAIApiKey` exports from backend config, updated docs/review references to `GEMINI_API_KEY` and `requireGeminiApiKey`, and changed Supabase Studio AI env mapping to read `GEMINI_API_KEY`; retained historical `OPENAI_API_KEY` mentions in past log entries for append-only audit integrity.

@@ -39,8 +39,8 @@ Exports:
   - `AI_PROVIDER`
   - `AI_PRIMARY_MODEL`
   - `AI_FALLBACK_MODEL`
-  - `OPENAI_API_KEY`
-- Provider calls require `requireOpenAIApiKey()` at call time.
+  - `GEMINI_API_KEY`
+- Provider calls require `requireGeminiApiKey()` at call time.
 
 ## Scope boundaries
 

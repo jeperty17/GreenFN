@@ -6,7 +6,7 @@ This task established backend-only AI API key handling.
 
 - Added AI env variables to backend template (`greenfn/.env.example`).
 - Added backend config wiring in `greenfn/src/config/env.js`.
-- Added fail-fast helper `requireOpenAIApiKey()` for runtime AI calls.
+- Added fail-fast helper `requireGeminiApiKey()` for runtime AI calls.
 - Confirmed frontend env config remains free of AI secret keys.
 
 ## Commands to Reproduce / Run
@@ -15,7 +15,7 @@ From repository root:
 
 ```bash
 cd greenfn
-node -e "const env=require('./src/config/env'); console.log(env.AI_PROVIDER, env.AI_PRIMARY_MODEL, env.AI_FALLBACK_MODEL, !!env.OPENAI_API_KEY);"
+node -e "const env=require('./src/config/env'); console.log(env.AI_PROVIDER, env.AI_PRIMARY_MODEL, env.AI_FALLBACK_MODEL, !!env.GEMINI_API_KEY);"
 ```
 
 Expected: provider/model values are resolved; key presence is shown as boolean only.
@@ -25,8 +25,8 @@ Expected: provider/model values are resolved; key presence is shown as boolean o
 Confirm AI key is backend-only:
 
 ```bash
-grep -RIn "OPENAI_API_KEY\|AI_PROVIDER\|AI_PRIMARY_MODEL\|AI_FALLBACK_MODEL" greenfn-web || true
-grep -n "OPENAI_API_KEY\|AI_PROVIDER\|AI_PRIMARY_MODEL\|AI_FALLBACK_MODEL" greenfn/.env.example
+grep -RIn "GEMINI_API_KEY\|AI_PROVIDER\|AI_PRIMARY_MODEL\|AI_FALLBACK_MODEL" greenfn-web || true
+grep -n "GEMINI_API_KEY\|AI_PROVIDER\|AI_PRIMARY_MODEL\|AI_FALLBACK_MODEL" greenfn/.env.example
 ```
 
 Expected:
