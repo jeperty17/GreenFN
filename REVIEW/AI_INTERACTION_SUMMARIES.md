@@ -2,7 +2,7 @@
 
 ## Task Summary
 
-Built the structured post-interaction questionnaire form component as the first step of the AI Interaction Summaries feature. The form provides multiple input modes to capture interaction details flexibly, enabling AI-powered summarization workflows.
+Built the post-interaction questionnaire flow and AI summary pipeline for GreenFN. The summary generation path now uses a hidden bullet-only prompt contract, avoids leaking backend identifiers, and returns sanitized user-facing errors instead of raw provider or Prisma messages.
 
 ## Completed Items
 
@@ -32,7 +32,7 @@ Built the structured post-interaction questionnaire form component as the first 
   - Endpoint now calls AI service wrapper and returns generated summary text, model, source mode, usage metadata, and timestamp
 - ✅ Implemented concise recall-focused prompt templates in AI service with:
   - Mode-aware guidance by source type (`structured`, `pasted-summary`, `unstructured`, `chat-transcript`, `notes`)
-  - Explicit output contract (fixed sections, concise bullets, no guessing)
+  - Hidden output contract that requires a flat bullet list, short summaries, explicit dates/tasks, and no internal IDs/backend details
   - Template emphasis injection in summary generation messages
 - ✅ Implemented content safety checks and token/length limits in AI service:
   - Blocked-content screening for high-risk categories (self-harm intent, violent threats, sexual-minors content)
@@ -62,9 +62,11 @@ Built the structured post-interaction questionnaire form component as the first 
   - Added dashboard-ready endpoint `GET /api/ai/metrics?windowMinutes=<int>`
 - ✅ Added provider-unavailable fallback behavior for AI summaries:
   - Added route-level degraded fallback when AI provider is unavailable (timeouts, upstream 5xx/429, or missing key)
-  - Added local deterministic summary generation with consistent sectioned output contract
+  - Added local deterministic summary generation with the same bullet-only output contract
   - Added fallback metadata in persisted/response model metadata (`provider`, `degraded`, `fallbackReason`)
   - Added fallback usage logging event `summary_provider_unavailable_local_fallback`
+- ✅ Sanitized AI summary error display so the frontend shows friendly messages for validation, rate-limit, safety, and availability issues rather than raw backend or Prisma text
+- ✅ Removed backend/database identifiers from the visible summary success path and from the AI prompt context
 - ✅ Wired AI Summary frontend to backend persistence path:
   - `AISummaryPage` now calls `POST /api/ai/summaries` during generation flow
   - Summary preview now uses backend-generated text and tracks persisted `summary.id`

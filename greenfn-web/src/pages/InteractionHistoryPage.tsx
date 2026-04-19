@@ -128,6 +128,58 @@ function formatLastActivity(dateString: string) {
   return `${days} days ago`;
 }
 
+function getFriendlyInteractionErrorMessage(responseStatus: number): string {
+  if (responseStatus === 400) {
+    return "Please check the interaction details and try again.";
+  }
+
+  if (responseStatus === 401 || responseStatus === 403) {
+    return "You are not allowed to perform this action right now.";
+  }
+
+  if (responseStatus === 404) {
+    return "The selected record could not be found.";
+  }
+
+  if (responseStatus === 409) {
+    return "This interaction could not be saved due to a data conflict.";
+  }
+
+  if (responseStatus === 422) {
+    return "Please revise the input and try again.";
+  }
+
+  if (responseStatus >= 500) {
+    return "Unable to save interaction right now. Please try again later.";
+  }
+
+  return "Failed to save interaction. Please try again.";
+}
+
+function getFriendlySummaryLinkErrorMessage(responseStatus: number): string {
+  if (responseStatus === 400) {
+    return "AI summary could not be linked due to invalid input.";
+  }
+
+  if (responseStatus === 401 || responseStatus === 403) {
+    return "You are not allowed to link this AI summary.";
+  }
+
+  if (responseStatus === 404) {
+    return "The interaction to link the AI summary was not found.";
+  }
+
+  if (responseStatus === 409) {
+    return "AI summary link could not be saved due to a data conflict.";
+  }
+
+  if (responseStatus >= 500) {
+    return "Unable to link AI summary right now. Please try again later.";
+  }
+
+  return "AI summary link failed. Please try again.";
+}
+
 function InteractionHistoryPage() {
   const [contacts, setContacts] = useState<ContactItem[]>([]);
   const [selectedContactId, setSelectedContactId] = useState<string>("");
@@ -427,11 +479,7 @@ function InteractionHistoryPage() {
       });
 
       if (!response.ok) {
-        const errorPayload = await response.json().catch(() => null);
-        const apiErrorMessage = errorPayload?.error?.message;
-        throw new Error(
-          apiErrorMessage || `Failed to save interaction (${response.status})`,
-        );
+        throw new Error(getFriendlyInteractionErrorMessage(response.status));
       }
 
       const payload = await response.json();
@@ -456,11 +504,9 @@ function InteractionHistoryPage() {
         );
 
         if (!linkResponse.ok) {
-          const linkErrorPayload = await linkResponse.json().catch(() => null);
-          const linkErrorMessage =
-            linkErrorPayload?.error?.message ||
-            `Summary link failed (${linkResponse.status})`;
-          throw new Error(linkErrorMessage);
+          throw new Error(
+            getFriendlySummaryLinkErrorMessage(linkResponse.status),
+          );
         }
 
         const linkedPayload = await linkResponse.json();

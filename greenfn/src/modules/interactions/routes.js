@@ -3,8 +3,11 @@ const { validateBody, requiredString } = require("../../middleware/validate");
 const prisma = require("../../lib/prisma");
 const { httpError } = require("../../utils/httpError");
 const { logInteractionEvent, toStatusLevel } = require("./logging");
+const { createAIService } = require("../ai/service");
+const { AI_TIMEOUT_MS } = require("../../config/env");
 
 const router = express.Router();
+const aiService = createAIService({ timeoutMs: AI_TIMEOUT_MS });
 
 const INTERACTION_TYPES = new Set([
   "CALL",
@@ -24,6 +27,7 @@ const AI_SUMMARY_TEXT_MAX_LENGTH = 6000;
 const AI_SUMMARY_MODEL_MAX_LENGTH = 120;
 const AI_SUMMARY_SOURCE_MODE_MAX_LENGTH = 80;
 const OBSERVABLE_METHODS = new Set(["GET", "POST", "PATCH", "DELETE"]);
+const TASK_EXTRACTION_LIMIT = 5;
 
 function parsePositiveInt(value, fallbackValue) {
   const parsed = Number.parseInt(String(value || ""), 10);
@@ -53,6 +57,354 @@ function normalizeOptionalString(value) {
 
   const normalizedValue = value.trim();
   return normalizedValue.length > 0 ? normalizedValue : null;
+}
+
+function normalizeWhitespace(value) {
+  return String(value || "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+function buildYmd(date) {
+  const year = date.getFullYear();
+  const month = String(date.getMonth() + 1).padStart(2, "0");
+  const day = String(date.getDate()).padStart(2, "0");
+  return `${year}${month}${day}`;
+}
+
+function parseYmdToDate(ymd) {
+  if (!/^\d{8}$/.test(String(ymd || ""))) {
+    return null;
+  }
+
+  const year = Number(ymd.slice(0, 4));
+  const month = Number(ymd.slice(4, 6));
+  const day = Number(ymd.slice(6, 8));
+  const parsed = new Date(year, month - 1, day, 12, 0, 0, 0);
+
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== month - 1 ||
+    parsed.getDate() !== day
+  ) {
+    return null;
+  }
+
+  return parsed;
+}
+
+function stripCodeFence(text) {
+  const trimmed = String(text || "").trim();
+
+  if (!trimmed.startsWith("```") || !trimmed.endsWith("```")) {
+    return trimmed;
+  }
+
+  return trimmed.replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+}
+
+function safeParseJson(text) {
+  const normalized = stripCodeFence(text);
+  const firstBrace = normalized.indexOf("{");
+  const lastBrace = normalized.lastIndexOf("}");
+
+  if (firstBrace === -1 || lastBrace === -1 || lastBrace <= firstBrace) {
+    return null;
+  }
+
+  const candidate = normalized.slice(firstBrace, lastBrace + 1);
+
+  try {
+    return JSON.parse(candidate);
+  } catch (_error) {
+    return null;
+  }
+}
+
+function resolveWeekdayIndex(name) {
+  const normalized = String(name || "")
+    .trim()
+    .toLowerCase();
+  const map = {
+    sunday: 0,
+    monday: 1,
+    tuesday: 2,
+    wednesday: 3,
+    thursday: 4,
+    friday: 5,
+    saturday: 6,
+  };
+
+  return Object.prototype.hasOwnProperty.call(map, normalized)
+    ? map[normalized]
+    : null;
+}
+
+function getNextWeekday(baseDate, weekdayIndex) {
+  const next = new Date(baseDate);
+  const currentWeekday = next.getDay();
+  let delta = (weekdayIndex - currentWeekday + 7) % 7;
+
+  if (delta === 0) {
+    delta = 7;
+  }
+
+  next.setDate(next.getDate() + delta);
+  return next;
+}
+
+function inferMonthNameDate(text, baseDate) {
+  const normalized = String(text || "").toLowerCase();
+  const monthMap = {
+    january: 0,
+    february: 1,
+    march: 2,
+    april: 3,
+    may: 4,
+    june: 5,
+    july: 6,
+    august: 7,
+    september: 8,
+    october: 9,
+    november: 10,
+    december: 11,
+  };
+
+  const match = normalized.match(
+    /\b(\d{1,2})(?:st|nd|rd|th)?\s+(january|february|march|april|may|june|july|august|september|october|november|december)(?:\s+(\d{4}))?\b/i,
+  );
+
+  if (!match) {
+    return null;
+  }
+
+  const day = Number(match[1]);
+  const monthIndex = monthMap[match[2].toLowerCase()];
+  if (
+    !Number.isInteger(day) ||
+    day < 1 ||
+    day > 31 ||
+    monthIndex === undefined
+  ) {
+    return null;
+  }
+
+  const explicitYear = match[3] ? Number(match[3]) : null;
+  let year = explicitYear || baseDate.getFullYear();
+  let parsed = new Date(year, monthIndex, day, 12, 0, 0, 0);
+
+  if (
+    parsed.getFullYear() !== year ||
+    parsed.getMonth() !== monthIndex ||
+    parsed.getDate() !== day
+  ) {
+    return null;
+  }
+
+  if (!explicitYear && parsed.getTime() < baseDate.getTime()) {
+    year += 1;
+    parsed = new Date(year, monthIndex, day, 12, 0, 0, 0);
+
+    if (
+      parsed.getFullYear() !== year ||
+      parsed.getMonth() !== monthIndex ||
+      parsed.getDate() !== day
+    ) {
+      return null;
+    }
+  }
+
+  return buildYmd(parsed);
+}
+
+function inferYmdFromText(text, baseDate) {
+  const normalized = String(text || "")
+    .trim()
+    .toLowerCase();
+  if (!normalized) {
+    return null;
+  }
+
+  const directYmd = normalized.match(/\b(\d{4})(\d{2})(\d{2})\b/);
+  if (directYmd) {
+    const ymd = `${directYmd[1]}${directYmd[2]}${directYmd[3]}`;
+    return parseYmdToDate(ymd) ? ymd : null;
+  }
+
+  const isoDate = normalized.match(/\b(\d{4})-(\d{2})-(\d{2})\b/);
+  if (isoDate) {
+    const ymd = `${isoDate[1]}${isoDate[2]}${isoDate[3]}`;
+    return parseYmdToDate(ymd) ? ymd : null;
+  }
+
+  const monthNameDate = inferMonthNameDate(normalized, baseDate);
+  if (monthNameDate) {
+    return monthNameDate;
+  }
+
+  if (normalized.includes("today")) {
+    return buildYmd(baseDate);
+  }
+
+  if (normalized.includes("tomorrow")) {
+    const tomorrow = new Date(baseDate);
+    tomorrow.setDate(tomorrow.getDate() + 1);
+    return buildYmd(tomorrow);
+  }
+
+  const nextWeekdayMatch = normalized.match(
+    /\bnext\s+(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+  );
+  if (nextWeekdayMatch) {
+    const weekday = resolveWeekdayIndex(nextWeekdayMatch[1]);
+    if (weekday !== null) {
+      return buildYmd(getNextWeekday(baseDate, weekday));
+    }
+  }
+
+  const weekdayMatch = normalized.match(
+    /\b(on\s+)?(monday|tuesday|wednesday|thursday|friday|saturday|sunday)\b/i,
+  );
+  if (weekdayMatch) {
+    const weekday = resolveWeekdayIndex(weekdayMatch[2]);
+    if (weekday !== null) {
+      return buildYmd(getNextWeekday(baseDate, weekday));
+    }
+  }
+
+  return null;
+}
+
+function normalizeExtractedTask(rawTask, baseDate) {
+  if (!rawTask || typeof rawTask !== "object") {
+    return null;
+  }
+
+  const title = normalizeWhitespace(rawTask.title);
+  if (!title) {
+    return null;
+  }
+
+  const description = normalizeWhitespace(rawTask.description) || title;
+  const rawDueDate =
+    rawTask.dueDate === null || rawTask.dueDate === undefined
+      ? null
+      : String(rawTask.dueDate).trim();
+
+  const dueDateYmd = rawDueDate
+    ? inferYmdFromText(rawDueDate, baseDate)
+    : inferYmdFromText(`${title} ${description}`, baseDate);
+
+  return {
+    title: title.slice(0, 100),
+    description: description.slice(0, 220),
+    dueDateYmd,
+  };
+}
+
+function fallbackTaskCandidates(summaryText, baseDate) {
+  const lines = String(summaryText || "")
+    .split(/\r?\n+/)
+    .map((line) => normalizeWhitespace(line.replace(/^[-*]\s*/, "")))
+    .filter(Boolean);
+
+  return lines
+    .filter((line) =>
+      /(follow up|follow-up|schedule|call|meeting|send|review|task|remind|prepare)/i.test(
+        line,
+      ),
+    )
+    .slice(0, TASK_EXTRACTION_LIMIT)
+    .map((line) => ({
+      title: line,
+      description: `Auto-created from AI summary: ${line}`,
+      dueDate: inferYmdFromText(line, baseDate),
+    }));
+}
+
+async function buildTaskCandidatesFromSummary({ summaryText, generatedAt }) {
+  const baseDate = new Date(generatedAt);
+
+  try {
+    const extractionResult = await aiService.extractTasksFromSummary({
+      summaryText,
+      todayYmd: buildYmd(baseDate),
+      timezone: "Asia/Singapore",
+    });
+
+    const parsed = safeParseJson(extractionResult.text);
+    const rawTasks = Array.isArray(parsed?.tasks) ? parsed.tasks : [];
+
+    return rawTasks
+      .map((task) => normalizeExtractedTask(task, baseDate))
+      .filter(Boolean)
+      .slice(0, TASK_EXTRACTION_LIMIT);
+  } catch (_error) {
+    return fallbackTaskCandidates(summaryText, baseDate)
+      .map((task) => normalizeExtractedTask(task, baseDate))
+      .filter(Boolean)
+      .slice(0, TASK_EXTRACTION_LIMIT);
+  }
+}
+
+async function createTasksFromCandidates({ contactId, candidates }) {
+  const seen = new Set();
+  const createdTasks = [];
+
+  for (const candidate of candidates) {
+    if (!candidate?.dueDateYmd) {
+      continue;
+    }
+
+    const dueAt = parseYmdToDate(candidate.dueDateYmd);
+    if (!dueAt) {
+      continue;
+    }
+
+    const dedupeKey = `${candidate.title.toLowerCase()}|${candidate.dueDateYmd}`;
+    if (seen.has(dedupeKey)) {
+      continue;
+    }
+
+    seen.add(dedupeKey);
+
+    const existing = await prisma.nextStep.findFirst({
+      where: {
+        contactId,
+        title: candidate.title,
+        dueAt,
+      },
+      select: { id: true },
+    });
+
+    if (existing) {
+      continue;
+    }
+
+    const task = await prisma.nextStep.create({
+      data: {
+        contactId,
+        title: candidate.title,
+        description: candidate.description,
+        dueAt,
+        status: "OPEN",
+      },
+      select: {
+        id: true,
+        title: true,
+        dueAt: true,
+      },
+    });
+
+    createdTasks.push({
+      id: task.id,
+      title: task.title,
+      dueAt: task.dueAt ? task.dueAt.toISOString() : null,
+      dueDateYmd: candidate.dueDateYmd,
+    });
+  }
+
+  return createdTasks;
 }
 
 function parseOccurredAt(value, fieldName, errors) {
@@ -311,7 +663,11 @@ function validateUpdateInteraction(body) {
   return errors;
 }
 
-async function resolveAdvisorId() {
+async function resolveAdvisorId(req) {
+  if (req?.authUser?.id && typeof req.authUser.id === "string") {
+    return req.authUser.id;
+  }
+
   const advisor = await prisma.user.findFirst({
     select: { id: true },
     orderBy: { createdAt: "asc" },
@@ -442,7 +798,7 @@ router.use((req, res, next) => {
 
 router.get("/", async (req, res, next) => {
   try {
-    const advisorId = await resolveAdvisorId();
+    const advisorId = await resolveAdvisorId(req);
     const contactId = String(req.query.contactId || "").trim();
     const page = parsePositiveInt(req.query.page, 1);
     const pageSize = Math.min(parsePositiveInt(req.query.pageSize, 20), 100);
@@ -523,7 +879,7 @@ router.get("/", async (req, res, next) => {
 
 router.get("/:interactionId", async (req, res, next) => {
   try {
-    const advisorId = await resolveAdvisorId();
+    const advisorId = await resolveAdvisorId(req);
     const item = await resolveAdvisorInteraction(
       req.params.interactionId,
       advisorId,
@@ -546,7 +902,7 @@ router.post(
   validateBody(validateSummaryLink),
   async (req, res, next) => {
     try {
-      const advisorId = await resolveAdvisorId();
+      const advisorId = await resolveAdvisorId(req);
       const existing = await resolveAdvisorInteraction(
         req.params.interactionId,
         advisorId,
@@ -579,13 +935,31 @@ router.post(
         },
       });
 
+      const summaryText = String(req.body.summaryText || "").trim();
+      const generatedAt =
+        parseOptionalIsoDate(req.body.generatedAt, "generatedAt", []) ||
+        new Date();
+
+      const taskCandidates = await buildTaskCandidatesFromSummary({
+        summaryText,
+        generatedAt,
+      });
+
+      const autoCreatedTasks = await createTasksFromCandidates({
+        contactId: updated.contactId,
+        candidates: taskCandidates,
+      });
+
       setInteractionObservation(res, "link-summary", {
         advisorId,
         contactId: updated.contactId,
         interactionId: updated.id,
       });
 
-      res.status(200).json({ item: mapInteraction(updated) });
+      res.status(200).json({
+        item: mapInteraction(updated),
+        autoCreatedTasks,
+      });
     } catch (error) {
       next(error);
     }
@@ -594,7 +968,7 @@ router.post(
 
 router.delete("/:interactionId/summary-link", async (req, res, next) => {
   try {
-    const advisorId = await resolveAdvisorId();
+    const advisorId = await resolveAdvisorId(req);
     const existing = await resolveAdvisorInteraction(
       req.params.interactionId,
       advisorId,
@@ -625,7 +999,7 @@ router.post(
   validateBody(validateCreateInteraction),
   async (req, res, next) => {
     try {
-      const advisorId = await resolveAdvisorId();
+      const advisorId = await resolveAdvisorId(req);
       await resolveAdvisorContact(req.body.contactId, advisorId);
 
       const occurredAtErrors = [];
@@ -683,7 +1057,7 @@ router.patch(
   validateBody(validateUpdateInteraction),
   async (req, res, next) => {
     try {
-      const advisorId = await resolveAdvisorId();
+      const advisorId = await resolveAdvisorId(req);
       const existing = await resolveAdvisorInteraction(
         req.params.interactionId,
         advisorId,
@@ -751,7 +1125,7 @@ router.patch(
 
 router.delete("/:interactionId", async (req, res, next) => {
   try {
-    const advisorId = await resolveAdvisorId();
+    const advisorId = await resolveAdvisorId(req);
     const existing = await resolveAdvisorInteraction(
       req.params.interactionId,
       advisorId,

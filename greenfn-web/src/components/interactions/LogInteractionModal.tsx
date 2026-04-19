@@ -28,6 +28,38 @@ interface LogInteractionModalProps {
   ) => void;
 }
 
+function getFriendlySummaryErrorMessage(responseStatus: number): string {
+  if (responseStatus === 400) {
+    return "Please check the summary input and try again.";
+  }
+
+  if (responseStatus === 401 || responseStatus === 403) {
+    return "You are not allowed to generate a summary right now.";
+  }
+
+  if (responseStatus === 404) {
+    return "The selected contact or record could not be found.";
+  }
+
+  if (responseStatus === 413) {
+    return "The input is too long. Please shorten it and try again.";
+  }
+
+  if (responseStatus === 422) {
+    return "The input was blocked by a safety check. Please revise it and try again.";
+  }
+
+  if (responseStatus === 429) {
+    return "Too many requests. Please wait a moment and try again.";
+  }
+
+  if (responseStatus >= 500) {
+    return "AI summary generation is temporarily unavailable. Please try again later.";
+  }
+
+  return "Failed to generate summary. Please try again.";
+}
+
 function LogInteractionModal({
   isOpen,
   isSavingInteraction,
@@ -126,11 +158,7 @@ function LogInteractionModal({
       });
 
       if (!response.ok) {
-        const errorPayload = await response.json().catch(() => null);
-        throw new Error(
-          errorPayload?.error?.message ||
-            `Failed to generate summary (${response.status})`,
-        );
+        throw new Error(getFriendlySummaryErrorMessage(response.status));
       }
 
       const payload = await response.json();
@@ -162,7 +190,10 @@ function LogInteractionModal({
 
       toast.success("AI summary generated successfully");
     } catch (error) {
-      toast.error((error as Error).message || "Failed to generate summary");
+      toast.error(
+        (error as Error).message ||
+          "AI summary generation is temporarily unavailable. Please try again later.",
+      );
     } finally {
       setIsGeneratingSummary(false);
     }

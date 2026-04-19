@@ -755,3 +755,35 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-04-18 01:42:21 +0800
 - FILES_CHANGED: greenfn/.env.example, LOG.md
 - CHANGE_SUMMARY: Added `TASK_REMINDER_ALERT_WEBHOOK_URL` to the backend example env file so the scheduled task reminder worker's optional failure-alert webhook is documented alongside the other backend-only settings.
+
+### LOG-0090
+
+- TASK: AI Interaction Summaries
+- SUBTASK: Resolve merge conflict and enforce safe AI summaries in Interaction History flow
+- COMPLETED_AT: 2026-04-19 12:36:25 +0800
+- FILES_CHANGED: greenfn/src/modules/ai/service.js, greenfn/src/modules/ai/routes.js, greenfn-web/src/components/interactions/LogInteractionModal.tsx, greenfn-web/src/pages/InteractionHistoryPage.tsx, LOG.md
+- CHANGE_SUMMARY: Resolved merge markers in AI service and log files, kept the hidden bullet-only Gemini summary contract with backend-info redaction, and applied friendly status-based error messages in the merged Interaction History AI summary preview/save/link flow so raw backend or Prisma messages are no longer shown to users.
+
+### LOG-0091
+
+- TASK: AI Interaction Summaries
+- SUBTASK: Remove obsolete standalone AI Summary page
+- COMPLETED_AT: 2026-04-19 12:44:12 +0800
+- FILES_CHANGED: greenfn-web/src/pages/AISummaryPage.tsx, LOG.md
+- CHANGE_SUMMARY: Deleted the unused standalone `AISummaryPage` component after confirming there are no remaining route or import references and validating the frontend build still succeeds with the Interaction History integrated AI summary workflow.
+
+### LOG-0092
+
+- TASK: Interaction History
+- SUBTASK: Fix interaction save failures by aligning advisor resolution with authenticated user
+- COMPLETED_AT: 2026-04-19 14:24:00 +0800
+- FILES_CHANGED: greenfn/src/modules/interactions/routes.js, LOG.md
+- CHANGE_SUMMARY: Updated interaction route advisor resolution to prefer `req.authUser.id` (with existing fallback retained) and propagated the request-aware resolver across list/create/update/delete/summary-link handlers, preventing false not-found errors when saving interactions under non-default advisor accounts.
+
+### LOG-0093
+
+- TASK: AI Interaction Summaries
+- SUBTASK: Auto-create dated tasks from AI summary next-step actions during interaction logging
+- COMPLETED_AT: 2026-04-19 15:00:50 +0800
+- FILES_CHANGED: greenfn/src/modules/interactions/routes.js, LOG.md
+- CHANGE_SUMMARY: Enhanced `POST /api/interactions/:interactionId/summary-link` to extract actionable next steps from AI summary text and auto-create `NextStep` tasks when a due date can be inferred (including formats like `27th April`, `YYYY-MM-DD`, weekdays, and `next Monday`), with dedupe checks and response metadata containing `autoCreatedTasks`.
