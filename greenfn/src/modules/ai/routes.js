@@ -314,6 +314,40 @@ function buildRetentionUntil(generatedAt) {
   return retentionUntil;
 }
 
+function getSafeSummaryErrorMessage(error, fallbackMessage) {
+  const statusCode = Number(error?.statusCode || 0);
+
+  if (statusCode === 400) {
+    return "Please check the summary input and try again.";
+  }
+
+  if (statusCode === 401 || statusCode === 403) {
+    return "You are not allowed to generate a summary right now.";
+  }
+
+  if (statusCode === 404) {
+    return "The selected contact or record could not be found.";
+  }
+
+  if (statusCode === 413) {
+    return "The input is too long. Please shorten it and try again.";
+  }
+
+  if (statusCode === 422) {
+    return "The input was blocked by a safety check. Please revise it and try again.";
+  }
+
+  if (statusCode === 429) {
+    return "Too many requests. Please wait a moment and try again.";
+  }
+
+  if (statusCode === 500 || statusCode === 502 || statusCode === 503) {
+    return "AI summary generation is temporarily unavailable. Please try again later.";
+  }
+
+  return fallbackMessage;
+}
+
 function takeFirstMatches(input, matcher, limit = 2) {
   const lines = String(input || "")
     .split(/\r?\n+/)
@@ -355,15 +389,13 @@ function buildLocalFallbackSummary({ input, sourceMode }) {
   );
 
   return [
-    formatBulletSection("Context", [
-      `Source mode: ${sourceMode}`,
-      ...primaryContext,
-    ]),
-    formatBulletSection("Key Facts", keyFacts),
-    formatBulletSection("Client Needs", clientNeeds),
-    formatBulletSection("Decisions", decisions),
-    formatBulletSection("Next Steps", nextSteps),
-  ].join("\n\n");
+    `- Source mode: ${sourceMode}`,
+    ...primaryContext.slice(0, 2).map((line) => `- ${line}`),
+    ...keyFacts.slice(0, 2).map((line) => `- Key fact: ${line}`),
+    ...clientNeeds.slice(0, 2).map((line) => `- Client need: ${line}`),
+    ...decisions.slice(0, 2).map((line) => `- Decision: ${line}`),
+    ...nextSteps.slice(0, 3).map((line) => `- Next step: ${line}`),
+  ].join("\n");
 }
 
 function isAiProviderUnavailable(error) {
@@ -545,6 +577,17 @@ router.post(
         },
       });
     } catch (error) {
+      if (error?.statusCode) {
+        const safeMessage = getSafeSummaryErrorMessage(
+          error,
+          "Failed to generate summary.",
+        );
+
+        if (safeMessage !== error.message) {
+          error = httpError(error.statusCode, safeMessage, error.details);
+        }
+      }
+
       next(error);
     }
   },
