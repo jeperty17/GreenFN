@@ -875,3 +875,11 @@ Track all completed changes made in this repository, now and in the future, incl
 - COMPLETED_AT: 2026-04-19 15:35:40 +0800
 - FILES_CHANGED: greenfn/src/config/env.js, docs/ai-secret-handling.md, docs/ai-service-wrapper.md, REVIEW/AI_SECRET_HANDLING.md, REVIEW/DEPLOYMENT_ENV_VARS.md, supabase/config.toml, LOG.md
 - CHANGE_SUMMARY: Removed runtime `OPENAI_API_KEY` and `requireOpenAIApiKey` exports from backend config, updated docs/review references to `GEMINI_API_KEY` and `requireGeminiApiKey`, and changed Supabase Studio AI env mapping to read `GEMINI_API_KEY`; retained historical `OPENAI_API_KEY` mentions in past log entries for append-only audit integrity.
+
+### LOG-0105
+
+- TASK: Authentication Runtime Stability
+- SUBTASK: Fix missing JWT env exports causing signup token issuance failure
+- COMPLETED_AT: 2026-04-19 16:06:16 +0800
+- FILES_CHANGED: greenfn/src/config/env.js, LOG.md
+- CHANGE_SUMMARY: Restored backend auth environment exports (`AUTH_LOGIN_EMAIL`, `AUTH_LOGIN_PASSWORD`, `JWT_ACCESS_SECRET`, `JWT_ACCESS_EXPIRES_IN`) in config so `jwt.sign` receives a valid secret; restarted backend and verified `POST /api/auth/signup` now returns HTTP 201 with access token and user payload.

@@ -87,6 +87,19 @@ const AI_RATE_LIMIT_MAX_REQUESTS = readOptionalInt(
   "AI_RATE_LIMIT_MAX_REQUESTS",
   20,
 );
+const AUTH_LOGIN_EMAIL = readOptionalEnv(
+  "AUTH_LOGIN_EMAIL",
+  "advisor.seed@greenfn.local",
+);
+const AUTH_LOGIN_PASSWORD = readOptionalEnv(
+  "AUTH_LOGIN_PASSWORD",
+  "password123",
+);
+const JWT_ACCESS_SECRET = readOptionalEnv(
+  "JWT_ACCESS_SECRET",
+  "dev-insecure-jwt-secret-change-me",
+);
+const JWT_ACCESS_EXPIRES_IN = readOptionalEnv("JWT_ACCESS_EXPIRES_IN", "15m");
 const CORS_ALLOWED_ORIGINS_RAW = readOptionalEnv(
   "CORS_ALLOWED_ORIGINS",
   "http://localhost:5173,https://greenfn-web.vercel.app",
@@ -117,6 +130,10 @@ module.exports = {
   AI_TIMEOUT_MS,
   AI_RATE_LIMIT_WINDOW_MS,
   AI_RATE_LIMIT_MAX_REQUESTS,
+  AUTH_LOGIN_EMAIL,
+  AUTH_LOGIN_PASSWORD,
+  JWT_ACCESS_SECRET,
+  JWT_ACCESS_EXPIRES_IN,
   CORS_ALLOWED_ORIGINS,
   requireGeminiApiKey,
 };
