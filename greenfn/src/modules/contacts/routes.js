@@ -247,6 +247,23 @@ function mapContact(contact) {
   };
 }
 
+function mapPolicy(policy) {
+  return {
+    id: policy.id,
+    contactId: policy.contactId,
+    provider: policy.provider || null,
+    policyType: policy.policyType || null,
+    details: policy.details || null,
+    startDate: policy.startDate
+      ? policy.startDate.toISOString().slice(0, 10)
+      : null,
+    endDate: policy.endDate ? policy.endDate.toISOString().slice(0, 10) : null,
+    summaryPdfUrl: policy.summaryPdfUrl || null,
+    createdAt: policy.createdAt,
+    updatedAt: policy.updatedAt,
+  };
+}
+
 function validateType(type, errors, fieldName = "type") {
   if (type === undefined || type === null || type === "") {
     return;
@@ -303,7 +320,42 @@ function validateOptionalStringField(body, fieldName, errors) {
 
 async function resolveAdvisorIdFromRequest(req) {
   if (req.authUser?.id) {
-    return req.authUser.id;
+    const advisorByAuthId = await prisma.user.findUnique({
+      where: { id: req.authUser.id },
+      select: { id: true },
+    });
+
+    if (advisorByAuthId?.id) {
+      return advisorByAuthId.id;
+    }
+
+    const authEmail = normalizeOptionalString(req.authUser.email);
+    if (authEmail) {
+      const advisorByEmail = await prisma.user.findFirst({
+        where: {
+          email: {
+            equals: authEmail,
+            mode: "insensitive",
+          },
+        },
+        select: { id: true },
+      });
+
+      if (advisorByEmail?.id) {
+        return advisorByEmail.id;
+      }
+    }
+
+    const createdAdvisor = await prisma.user.create({
+      data: {
+        id: req.authUser.id,
+        email: authEmail || `${req.authUser.id}@greenfn.local`,
+        name: normalizeOptionalString(req.authUser.name) || "GreenFN Advisor",
+      },
+      select: { id: true },
+    });
+
+    return createdAdvisor.id;
   }
 
   const advisor = await prisma.user.findFirst({
@@ -747,6 +799,92 @@ router.get("/:contactId", async (req, res, next) => {
     const contactWithTags = await withTagsForContact(contact);
 
     res.json({ item: mapContact(contactWithTags) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.get("/:contactId/policies", async (req, res, next) => {
+  try {
+    const advisorId = await resolveAdvisorIdFromRequest(req);
+    const contact = await resolveContactForWrite(
+      req.params.contactId,
+      advisorId,
+    );
+    const policies = await prisma.policy.findMany({
+      where: { contactId: contact.id },
+      orderBy: [{ startDate: "desc" }, { createdAt: "desc" }],
+    });
+
+    res.json({ items: policies.map(mapPolicy) });
+  } catch (error) {
+    next(error);
+  }
+});
+
+router.post("/:contactId/policies", async (req, res, next) => {
+  try {
+    const advisorId = await resolveAdvisorIdFromRequest(req);
+    const contact = await resolveContactForWrite(
+      req.params.contactId,
+      advisorId,
+    );
+    const validationErrors = [];
+    const policyType =
+      req.body?.policyType === undefined
+        ? null
+        : normalizeOptionalString(req.body.policyType);
+    const startDate = parseBirthday(
+      req.body?.startDate,
+      "startDate",
+      validationErrors,
+    );
+    const endDate = parseBirthday(
+      req.body?.endDate,
+      "endDate",
+      validationErrors,
+    );
+
+    validateOptionalStringField(req.body || {}, "provider", validationErrors);
+    validateOptionalStringField(req.body || {}, "policyType", validationErrors);
+    validateOptionalStringField(req.body || {}, "details", validationErrors);
+    validateOptionalStringField(
+      req.body || {},
+      "summaryPdfUrl",
+      validationErrors,
+    );
+
+    if (!policyType) {
+      validationErrors.push({
+        field: "policyType",
+        message: "policyType is required",
+      });
+    }
+
+    if (startDate && endDate && endDate.getTime() < startDate.getTime()) {
+      validationErrors.push({
+        field: "endDate",
+        message: "endDate cannot be earlier than startDate",
+      });
+    }
+
+    if (validationErrors.length > 0) {
+      throw httpError(400, "Validation failed", validationErrors);
+    }
+
+    const policy = await prisma.policy.create({
+      data: {
+        contactId: contact.id,
+        provider: normalizeOptionalString(req.body?.provider),
+        policyType,
+        details: normalizeOptionalString(req.body?.details),
+        startDate,
+        endDate,
+        summaryPdfUrl: normalizeOptionalString(req.body?.summaryPdfUrl),
+      },
+    });
+
+    res.status(201).json({ item: mapPolicy(policy) });
   } catch (error) {
     next(error);
   }

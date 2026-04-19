@@ -758,13 +758,85 @@ Track all completed changes made in this repository, now and in the future, incl
 
 ### LOG-0090
 
+- TASK: Contacts Hub
+- SUBTASK: Fix contact details save/update endpoint method mismatch
+- COMPLETED_AT: 2026-04-18 22:25:21 +0800
+- FILES_CHANGED: greenfn-web/src/pages/ContactDetailsPage.tsx, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Updated Contact Details page update requests from `PUT` to backend-supported `PATCH` for both Save and starred-toggle flows, and added explicit non-OK response handling for starred updates so failed writes are handled correctly instead of silently appearing successful.
+
+### LOG-0091
+
+- TASK: Contacts Hub
+- SUBTASK: Add Contact Drawer submit toasts and return-to-hub behavior
+- COMPLETED_AT: 2026-04-18 22:27:11 +0800
+- FILES_CHANGED: greenfn-web/src/pages/ContactsHubPage.tsx, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Updated Contact Drawer submit flow to show green Sonner success toasts on create/edit success and red Sonner error toasts on validation/API failure, then close the drawer, refresh contacts, and navigate to the Contacts Hub route after successful saves.
+
+### LOG-0092
+
+- TASK: Contacts Hub
+- SUBTASK: Replace portfolio notes with contact policy table and add-policy action
+- COMPLETED_AT: 2026-04-18 22:31:45 +0800
+- FILES_CHANGED: greenfn/src/modules/contacts/routes.js, greenfn-web/src/pages/ContactDetailsPage.tsx, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Added contact-scoped policy list/create API endpoints, then rewired Contact Details portfolio section to load and render policies in a table and create new policies through an inline add form so new policies appear immediately in the portfolio table.
+
+### LOG-0093
+
+- TASK: Authentication
+- SUBTASK: Add user signup with name/email/password and hashed-password login
+- COMPLETED_AT: 2026-04-18 22:38:35 +0800
+- FILES_CHANGED: greenfn/src/modules/auth/routes.js, greenfn/prisma/schema.prisma, greenfn/prisma/migrations/20260418143500_user_add_password_hash/migration.sql, greenfn/prisma/seed.js, greenfn-web/src/context/AuthContext.tsx, greenfn-web/src/pages/LoginPage.tsx, REVIEW/AUTH_APPROACH.md, LOG.md
+- CHANGE_SUMMARY: Implemented `POST /api/auth/signup` for new-user registration with name/email/password, added `User.passwordHash` storage with migration, updated seed advisor to store hashed password, extended login to validate hashed credentials while preserving local env fallback auth, and wired frontend auth context/login page to support sign-up mode and immediate authenticated session for sidebar identity display.
+
+### LOG-0094
+
+- TASK: Contacts Hub
+- SUBTASK: Refactor page composition into smaller contacts components
+- COMPLETED_AT: 2026-04-18 22:40:18 +0800
+- FILES_CHANGED: greenfn-web/src/pages/ContactsHubPage.tsx, greenfn-web/src/components/contacts/ContactsHubHeader.tsx, greenfn-web/src/components/contacts/ContactsErrorBanner.tsx, greenfn-web/src/components/contacts/ContactsTableSection.tsx, greenfn-web/src/components/contacts/ContactsPagination.tsx, greenfn-web/src/types/contacts.ts, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Split Contacts Hub rendering into dedicated header, error-banner, and table-section components, and introduced a shared contacts pagination type so page-level code is easier to scan while preserving existing behavior and interactions.
+
+### LOG-0095
+
+- TASK: Authentication
+- SUBTASK: Fix contact-create advisor foreign key violations
+- COMPLETED_AT: 2026-04-18 22:45:23 +0800
+- FILES_CHANGED: greenfn/src/modules/auth/routes.js, greenfn/src/modules/contacts/routes.js, REVIEW/AUTH_APPROACH.md, LOG.md
+- CHANGE_SUMMARY: Removed ephemeral auth fallback identity issuance, ensured env-credential login always resolves to a persisted advisor user, and added advisor-id/email backfill logic in contacts advisor resolution so contact writes always use a valid `User` foreign key.
+
+### LOG-0096
+
+- TASK: Authentication
+- SUBTASK: Fix signup mode defaults and error-message surfacing
+- COMPLETED_AT: 2026-04-18 22:48:10 +0800
+- FILES_CHANGED: greenfn-web/src/pages/LoginPage.tsx, greenfn-web/src/context/AuthContext.tsx, REVIEW/AUTH_APPROACH.md, LOG.md
+- CHANGE_SUMMARY: Updated login/signup mode toggling so signup starts with blank credentials instead of seeded sign-in values, restored sign-in defaults when switching back, and expanded auth error parsing to read `error.message` payloads so signup failures show actionable backend messages.
+
+### LOG-0097
+
+- TASK: Authentication
+- SUBTASK: Show field-level signup validation failures in UI
+- COMPLETED_AT: 2026-04-18 22:50:08 +0800
+- FILES_CHANGED: greenfn-web/src/context/AuthContext.tsx, REVIEW/AUTH_APPROACH.md, LOG.md
+- CHANGE_SUMMARY: Added structured auth error-message parsing for backend validation detail arrays so signup/login failures now surface concrete field-level reasons instead of a generic `Validation failed` banner.
+
+### LOG-0098
+
+- TASK: Contacts Hub
+- SUBTASK: Lock contact-details Add Task modal to current contact
+- COMPLETED_AT: 2026-04-18 23:28:42 +0800
+- FILES_CHANGED: greenfn-web/src/components/tasks/AddTaskModal.tsx, greenfn-web/src/pages/ContactDetailsPage.tsx, REVIEW/CONTACTS_HUB.md, LOG.md
+- CHANGE_SUMMARY: Added fixed-contact mode to AddTaskModal and wired ContactDetailsPage to pass current contact, so add-task actions from a specific contact are constrained to that contact while preserving global Tasks page contact-selection behavior.
+
+### LOG-0099
+
 - TASK: AI Interaction Summaries
 - SUBTASK: Resolve merge conflict and enforce safe AI summaries in Interaction History flow
 - COMPLETED_AT: 2026-04-19 12:36:25 +0800
 - FILES_CHANGED: greenfn/src/modules/ai/service.js, greenfn/src/modules/ai/routes.js, greenfn-web/src/components/interactions/LogInteractionModal.tsx, greenfn-web/src/pages/InteractionHistoryPage.tsx, LOG.md
 - CHANGE_SUMMARY: Resolved merge markers in AI service and log files, kept the hidden bullet-only Gemini summary contract with backend-info redaction, and applied friendly status-based error messages in the merged Interaction History AI summary preview/save/link flow so raw backend or Prisma messages are no longer shown to users.
 
-### LOG-0091
+### LOG-0100
 
 - TASK: AI Interaction Summaries
 - SUBTASK: Remove obsolete standalone AI Summary page
@@ -772,7 +844,7 @@ Track all completed changes made in this repository, now and in the future, incl
 - FILES_CHANGED: greenfn-web/src/pages/AISummaryPage.tsx, LOG.md
 - CHANGE_SUMMARY: Deleted the unused standalone `AISummaryPage` component after confirming there are no remaining route or import references and validating the frontend build still succeeds with the Interaction History integrated AI summary workflow.
 
-### LOG-0092
+### LOG-0101
 
 - TASK: Interaction History
 - SUBTASK: Fix interaction save failures by aligning advisor resolution with authenticated user
@@ -780,7 +852,7 @@ Track all completed changes made in this repository, now and in the future, incl
 - FILES_CHANGED: greenfn/src/modules/interactions/routes.js, LOG.md
 - CHANGE_SUMMARY: Updated interaction route advisor resolution to prefer `req.authUser.id` (with existing fallback retained) and propagated the request-aware resolver across list/create/update/delete/summary-link handlers, preventing false not-found errors when saving interactions under non-default advisor accounts.
 
-### LOG-0093
+### LOG-0102
 
 - TASK: AI Provider Runtime Stability
 - SUBTASK: Prevent Railway boot crash from legacy AI_PROVIDER values
@@ -788,7 +860,7 @@ Track all completed changes made in this repository, now and in the future, incl
 - FILES_CHANGED: greenfn/src/config/env.js, greenfn/src/modules/ai/service.js, LOG.md
 - CHANGE_SUMMARY: Aligned backend AI env defaults to Gemini (`google` + Gemini model defaults), added `requireGeminiApiKey` and `GEMINI_API_KEY` exports for service compatibility, and introduced backward-compatible provider normalization that treats legacy `AI_PROVIDER=openai`/`gemini` as `google` so app startup no longer crashes on provider string mismatch in Railway.
 
-### LOG-0093
+### LOG-0103
 
 - TASK: AI Interaction Summaries
 - SUBTASK: Auto-create dated tasks from AI summary next-step actions during interaction logging
@@ -796,7 +868,7 @@ Track all completed changes made in this repository, now and in the future, incl
 - FILES_CHANGED: greenfn/src/modules/interactions/routes.js, LOG.md
 - CHANGE_SUMMARY: Enhanced `POST /api/interactions/:interactionId/summary-link` to extract actionable next steps from AI summary text and auto-create `NextStep` tasks when a due date can be inferred (including formats like `27th April`, `YYYY-MM-DD`, weekdays, and `next Monday`), with dedupe checks and response metadata containing `autoCreatedTasks`.
 
-### LOG-0094
+### LOG-0104
 
 - TASK: AI Provider Secret Cleanup
 - SUBTASK: Remove active OPENAI_API_KEY references and align docs to Gemini key usage

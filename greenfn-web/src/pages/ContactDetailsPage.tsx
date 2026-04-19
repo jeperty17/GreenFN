@@ -66,6 +66,19 @@ type TaskItem = {
   stageName: string | null;
 };
 
+type PolicyItem = {
+  id: string;
+  contactId: string;
+  provider: string | null;
+  policyType: string | null;
+  details: string | null;
+  startDate: string | null;
+  endDate: string | null;
+  summaryPdfUrl: string | null;
+  createdAt: string;
+  updatedAt: string;
+};
+
 type EditFormState = {
   fullName: string;
   email: string;
@@ -222,6 +235,7 @@ function ContactDetailsPage() {
   const [contact, setContact] = useState<ContactItem | null>(null);
   const [interactions, setInteractions] = useState<InteractionItem[]>([]);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
+  const [policies, setPolicies] = useState<PolicyItem[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
 
@@ -244,6 +258,16 @@ function ContactDetailsPage() {
   const [showDeleteModal, setShowDeleteModal] = useState(false);
   const [deleteConfirmed, setDeleteConfirmed] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
+  const [showAddPolicyForm, setShowAddPolicyForm] = useState(false);
+  const [isAddingPolicy, setIsAddingPolicy] = useState(false);
+  const [policyError, setPolicyError] = useState("");
+  const [policyForm, setPolicyForm] = useState({
+    policyType: "",
+    provider: "",
+    details: "",
+    startDate: "",
+    endDate: "",
+  });
 
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
   const [taskRefreshKey, setTaskRefreshKey] = useState(0);
@@ -275,7 +299,7 @@ function ContactDetailsPage() {
       setIsLoading(true);
       setErrorMessage("");
       try {
-        const [cRes, iRes, tRes] = await Promise.all([
+        const [cRes, iRes, tRes, pRes] = await Promise.all([
           fetch(`${API_BASE_URL}/api/contacts/${id}`, { signal: ctrl.signal }),
           fetch(
             `${API_BASE_URL}/api/interactions?contactId=${encodeURIComponent(id)}&page=1&pageSize=100&sortDirection=desc`,
@@ -284,20 +308,26 @@ function ContactDetailsPage() {
           fetch(`${API_BASE_URL}/api/tasks?view=calendar`, {
             signal: ctrl.signal,
           }),
+          fetch(`${API_BASE_URL}/api/contacts/${id}/policies`, {
+            signal: ctrl.signal,
+          }),
         ]);
         if (!cRes.ok)
           throw new Error(`Failed to load contact (${cRes.status})`);
         if (!iRes.ok)
           throw new Error(`Failed to load interactions (${iRes.status})`);
         if (!tRes.ok) throw new Error(`Failed to load tasks (${tRes.status})`);
+        if (!pRes.ok) throw new Error(`Failed to load policies (${pRes.status})`);
 
         const { item: c }: { item: ContactItem } = await cRes.json();
         const { items: ints }: { items: InteractionItem[] } = await iRes.json();
         const { tasks: allTasks }: { tasks: TaskItem[] } = await tRes.json();
+        const { items: policyItems }: { items: PolicyItem[] } = await pRes.json();
 
         setContact(c);
         setInteractions(ints || []);
         setTasks((allTasks || []).filter((t) => t.contactId === id));
+        setPolicies(policyItems || []);
 
         // Seed edit form from loaded contact
         setEditForm({
@@ -444,7 +474,7 @@ function ContactDetailsPage() {
     setSaveError("");
     try {
       const res = await fetch(`${API_BASE_URL}/api/contacts/${contact.id}`, {
-        method: "PUT",
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(editForm),
       });
@@ -481,11 +511,14 @@ function ContactDetailsPage() {
     setContact({ ...contact, isStarred: next }); // optimistic
     setEditForm((f) => ({ ...f, isStarred: next }));
     try {
-      await fetch(`${API_BASE_URL}/api/contacts/${contact.id}`, {
-        method: "PUT",
+      const res = await fetch(`${API_BASE_URL}/api/contacts/${contact.id}`, {
+        method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ ...editForm, isStarred: next }),
       });
+      if (!res.ok) {
+        throw new Error(`Failed to update contact (${res.status})`);
+      }
     } catch {
       // Revert on failure
       setContact({ ...contact, isStarred: !next });
@@ -542,6 +575,46 @@ function ContactDetailsPage() {
       setErrorMessage((err as Error).message || "Failed to update task");
     } finally {
       setTaskBusyIds((prev) => prev.filter((id) => id !== task.id));
+    }
+  }
+
+  async function handleAddPolicy() {
+    if (!contact) return;
+    const policyType = policyForm.policyType.trim();
+    if (!policyType) {
+      setPolicyError("Policy type is required");
+      return;
+    }
+
+    setIsAddingPolicy(true);
+    setPolicyError("");
+    try {
+      const res = await fetch(`${API_BASE_URL}/api/contacts/${contact.id}/policies`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          policyType,
+          provider: policyForm.provider.trim(),
+          details: policyForm.details.trim(),
+          startDate: policyForm.startDate,
+          endDate: policyForm.endDate,
+        }),
+      });
+      if (!res.ok) throw new Error(`Failed to add policy (${res.status})`);
+      const { item }: { item: PolicyItem } = await res.json();
+      setPolicies((prev) => [item, ...prev]);
+      setPolicyForm({
+        policyType: "",
+        provider: "",
+        details: "",
+        startDate: "",
+        endDate: "",
+      });
+      setShowAddPolicyForm(false);
+    } catch (err) {
+      setPolicyError((err as Error).message || "Failed to add policy");
+    } finally {
+      setIsAddingPolicy(false);
     }
   }
 
@@ -1033,34 +1106,176 @@ function ContactDetailsPage() {
                     portfolio and coverage
                   </p>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setPolicyError("");
+                    setShowAddPolicyForm((prev) => !prev);
+                  }}
+                  className="h-9 px-3 rounded-md bg-primary text-white hover:bg-primary/90 transition-colors text-sm font-medium inline-flex items-center gap-1.5 shadow-sm"
+                >
+                  <Plus className="h-4 w-4" />
+                  Add new policy
+                </button>
               </div>
 
-              {contact.portfolioSummary ? (
-                <div className="rounded-xl border border-border bg-white shadow-sm p-5">
-                  <div className="flex items-center gap-2 mb-3">
-                    <TrendingUp className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-semibold text-foreground">
-                      Portfolio Summary
-                    </span>
+              {showAddPolicyForm && (
+                <div className="mb-3 rounded-xl border border-border bg-white p-4 shadow-sm">
+                  <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Policy type
+                      </label>
+                      <input
+                        value={policyForm.policyType}
+                        onChange={(e) =>
+                          setPolicyForm((prev) => ({
+                            ...prev,
+                            policyType: e.target.value,
+                          }))
+                        }
+                        className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        placeholder="Whole Life, ILP, Term..."
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Provider
+                      </label>
+                      <input
+                        value={policyForm.provider}
+                        onChange={(e) =>
+                          setPolicyForm((prev) => ({
+                            ...prev,
+                            provider: e.target.value,
+                          }))
+                        }
+                        className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        placeholder="AIA, Prudential..."
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Start date
+                      </label>
+                      <input
+                        type="date"
+                        value={policyForm.startDate}
+                        onChange={(e) =>
+                          setPolicyForm((prev) => ({
+                            ...prev,
+                            startDate: e.target.value,
+                          }))
+                        }
+                        className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </div>
+                    <div className="space-y-1.5">
+                      <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        End date
+                      </label>
+                      <input
+                        type="date"
+                        value={policyForm.endDate}
+                        onChange={(e) =>
+                          setPolicyForm((prev) => ({
+                            ...prev,
+                            endDate: e.target.value,
+                          }))
+                        }
+                        className="h-9 w-full rounded-md border border-border bg-background px-3 text-sm focus:outline-none focus:ring-2 focus:ring-primary/30"
+                      />
+                    </div>
+                    <div className="space-y-1.5 md:col-span-2">
+                      <label className="text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                        Notes
+                      </label>
+                      <textarea
+                        rows={2}
+                        value={policyForm.details}
+                        onChange={(e) =>
+                          setPolicyForm((prev) => ({
+                            ...prev,
+                            details: e.target.value,
+                          }))
+                        }
+                        className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+                        placeholder="Coverage amount, premium cadence, riders..."
+                      />
+                    </div>
                   </div>
-                  <p className="text-sm leading-relaxed text-foreground">
-                    {contact.portfolioSummary}
-                  </p>
-                </div>
-              ) : (
-                <div className="rounded-xl border border-dashed border-border bg-white/50 p-10 text-center">
-                  <TrendingUp className="h-8 w-8 text-muted-foreground/40 mx-auto mb-3" />
-                  <p className="text-sm font-medium text-muted-foreground">
-                    No policies yet
-                  </p>
-                  <button
-                    onClick={enterEdit}
-                    className="mt-4 h-8 px-3 rounded-md bg-primary text-white text-xs font-medium hover:bg-primary/90 transition-colors"
-                  >
-                    Add new policy
-                  </button>
+                  {policyError && (
+                    <p className="mt-2 text-sm text-destructive">{policyError}</p>
+                  )}
+                  <div className="mt-3 flex items-center justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowAddPolicyForm(false)}
+                      className="h-8 px-3 rounded-md border border-border bg-card text-sm hover:bg-muted transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleAddPolicy}
+                      disabled={isAddingPolicy}
+                      className="h-8 px-3 rounded-md bg-primary text-white text-sm hover:bg-primary/90 transition-colors disabled:opacity-60"
+                    >
+                      {isAddingPolicy ? "Adding..." : "Add policy"}
+                    </button>
+                  </div>
                 </div>
               )}
+
+              <div className="rounded-xl border border-border bg-white shadow-sm overflow-x-auto">
+                {policies.length === 0 ? (
+                  <div className="p-10 text-center">
+                    <TrendingUp className="mx-auto mb-3 h-8 w-8 text-muted-foreground/40" />
+                    <p className="text-sm font-medium text-muted-foreground">
+                      No policies yet
+                    </p>
+                    <p className="mt-1 text-xs text-muted-foreground">
+                      Add a policy to build this contact's portfolio summary.
+                    </p>
+                  </div>
+                ) : (
+                  <table className="w-full min-w-[760px] text-left text-sm">
+                    <thead className="bg-muted/35 text-xs uppercase tracking-wide text-muted-foreground">
+                      <tr>
+                        <th className="px-4 py-3 font-medium">Policy Type</th>
+                        <th className="px-4 py-3 font-medium">Provider</th>
+                        <th className="px-4 py-3 font-medium">Start</th>
+                        <th className="px-4 py-3 font-medium">End</th>
+                        <th className="px-4 py-3 font-medium">Details</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {policies.map((policy) => (
+                        <tr
+                          key={policy.id}
+                          className="border-t border-border align-top"
+                        >
+                          <td className="px-4 py-3 font-medium text-foreground">
+                            {policy.policyType || "—"}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">
+                            {policy.provider || "—"}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">
+                            {formatDate(policy.startDate)}
+                          </td>
+                          <td className="px-4 py-3 text-muted-foreground">
+                            {formatDate(policy.endDate)}
+                          </td>
+                          <td className="px-4 py-3 text-foreground">
+                            {policy.details || "—"}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                )}
+              </div>
             </section>
 
             {/* ════════════════════════════════════════════
@@ -1491,6 +1706,14 @@ function ContactDetailsPage() {
       <AddTaskModal
         isOpen={showAddTaskModal}
         onClose={() => setShowAddTaskModal(false)}
+        fixedContact={
+          contact
+            ? {
+                id: contact.id,
+                fullName: contact.fullName,
+              }
+            : null
+        }
         onSuccess={() => {
           setShowAddTaskModal(false);
           setTaskRefreshKey((k) => k + 1);

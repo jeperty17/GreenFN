@@ -25,16 +25,18 @@ export interface ContactItem {
   updatedAt: string;
 }
 
+export interface ContactsPaginationMeta {
+  page: number;
+  pageSize: number;
+  total: number;
+  totalPages: number;
+  hasPreviousPage: boolean;
+  hasNextPage: boolean;
+}
+
 export interface ContactsResponse {
   items: ContactItem[];
-  pagination: {
-    page: number;
-    pageSize: number;
-    total: number;
-    totalPages: number;
-    hasPreviousPage: boolean;
-    hasNextPage: boolean;
-  };
+  pagination: ContactsPaginationMeta;
 }
 
 export interface ContactFormState {

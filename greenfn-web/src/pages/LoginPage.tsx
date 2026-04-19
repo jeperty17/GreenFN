@@ -4,8 +4,10 @@ import { Navigate, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
 
 function LoginPage() {
-  const { user, login } = useAuth();
+  const { user, login, signup } = useAuth();
   const location = useLocation();
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [name, setName] = useState("");
   const [email, setEmail] = useState("advisor.seed@greenfn.local");
   const [password, setPassword] = useState("password123");
   const [submitting, setSubmitting] = useState(false);
@@ -26,10 +28,18 @@ function LoginPage() {
     setErrorMessage("");
 
     try {
-      await login({ email, password });
+      if (mode === "signup") {
+        await signup({ name, email, password });
+      } else {
+        await login({ email, password });
+      }
     } catch (error) {
       const message =
-        error instanceof Error ? error.message : "Unable to login";
+        error instanceof Error
+          ? error.message
+          : mode === "signup"
+            ? "Unable to sign up"
+            : "Unable to login";
       setErrorMessage(message);
     } finally {
       setSubmitting(false);
@@ -41,10 +51,65 @@ function LoginPage() {
       <section className="rounded-lg border bg-card p-6 text-card-foreground">
         <h1 className="text-xl font-semibold">GreenFN Login</h1>
         <p className="mt-2 text-sm text-muted-foreground">
-          Sign in to access the dashboard.
+          {mode === "signup"
+            ? "Create your account to start using GreenFN."
+            : "Sign in to access the dashboard."}
         </p>
 
+        <div className="mt-4 flex rounded-md border border-input p-1">
+          <button
+            type="button"
+            onClick={() => {
+              setMode("signin");
+              setErrorMessage("");
+              setName("");
+              setEmail("advisor.seed@greenfn.local");
+              setPassword("password123");
+            }}
+            className={[
+              "flex-1 rounded px-3 py-1.5 text-sm font-medium transition-colors",
+              mode === "signin"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            ].join(" ")}
+          >
+            Sign in
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode("signup");
+              setErrorMessage("");
+              setName("");
+              setEmail("");
+              setPassword("");
+            }}
+            className={[
+              "flex-1 rounded px-3 py-1.5 text-sm font-medium transition-colors",
+              mode === "signup"
+                ? "bg-primary text-primary-foreground"
+                : "text-muted-foreground hover:text-foreground",
+            ].join(" ")}
+          >
+            Sign up
+          </button>
+        </div>
+
         <form className="mt-6 space-y-4" onSubmit={onSubmit}>
+          {mode === "signup" ? (
+            <label className="block space-y-1 text-sm">
+              <span>Name</span>
+              <input
+                type="text"
+                value={name}
+                onChange={(event) => setName(event.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2"
+                autoComplete="name"
+                required
+              />
+            </label>
+          ) : null}
+
           <label className="block space-y-1 text-sm">
             <span>Email</span>
             <input
@@ -64,7 +129,10 @@ function LoginPage() {
               value={password}
               onChange={(event) => setPassword(event.target.value)}
               className="w-full rounded-md border border-input bg-background px-3 py-2"
-              autoComplete="current-password"
+              autoComplete={
+                mode === "signup" ? "new-password" : "current-password"
+              }
+              minLength={mode === "signup" ? 8 : undefined}
               required
             />
           </label>
@@ -80,7 +148,13 @@ function LoginPage() {
             className="w-full rounded-md bg-primary px-3 py-2 text-sm font-medium text-primary-foreground hover:opacity-90 disabled:opacity-60"
             disabled={submitting}
           >
-            {submitting ? "Signing in..." : "Sign in"}
+            {submitting
+              ? mode === "signup"
+                ? "Creating account..."
+                : "Signing in..."
+              : mode === "signup"
+                ? "Create account"
+                : "Sign in"}
           </button>
         </form>
       </section>

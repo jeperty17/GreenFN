@@ -31,6 +31,8 @@ interface AddTaskModalProps {
   initialDueAt?: string;
   /** Allow submitting a date earlier than today (for historical resolve flows). */
   allowPastDueDate?: boolean;
+  /** When provided, task creation is locked to this contact (no contact selector). */
+  fixedContact?: ContactOption | null;
 }
 
 function AddTaskModal({
@@ -42,6 +44,7 @@ function AddTaskModal({
   lockContactSelection = false,
   initialDueAt,
   allowPastDueDate = false,
+  fixedContact = null,
 }: AddTaskModalProps) {
   const [contacts, setContacts] = useState<ContactOption[]>([]);
   const [isLoadingContacts, setIsLoadingContacts] = useState(false);
@@ -57,7 +60,7 @@ function AddTaskModal({
 
   // Fetch contacts each time the modal opens
   useEffect(() => {
-    if (!isOpen) return;
+    if (!isOpen || fixedContact?.id) return;
 
     if (lockContactSelection && initialContactId) {
       setContacts(
@@ -93,7 +96,20 @@ function AddTaskModal({
 
     fetchContacts();
     return () => abortController.abort();
-  }, [isOpen]);
+  }, [
+    isOpen,
+    fixedContact?.id,
+    lockContactSelection,
+    initialContactId,
+    initialContactName,
+  ]);
+
+  useEffect(() => {
+    if (!isOpen) return;
+    if (!fixedContact?.id) return;
+    setContactId(fixedContact.id);
+    setContacts([fixedContact]);
+  }, [isOpen, fixedContact]);
 
   useEffect(() => {
     if (!isOpen) return;
@@ -231,7 +247,14 @@ function AddTaskModal({
               <Label htmlFor="add-task-contact">
                 Contact <span className="text-destructive">*</span>
               </Label>
-              {isLoadingContacts ? (
+              {fixedContact?.id ? (
+                <div
+                  id="add-task-contact"
+                  className="w-full rounded-md border border-input bg-muted/40 px-3 py-2 text-sm text-foreground"
+                >
+                  {fixedContact.fullName}
+                </div>
+              ) : isLoadingContacts ? (
                 <p className="text-sm text-muted-foreground">
                   Loading contacts…
                 </p>

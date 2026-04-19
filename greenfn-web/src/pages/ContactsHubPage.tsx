@@ -4,17 +4,18 @@
  * Does not render any UI directly beyond the layout shell.
  */
 import { type SyntheticEvent, useEffect, useMemo, useState } from "react";
-import { useSearchParams } from "react-router-dom";
-import { AlertCircle, Plus } from "lucide-react";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { toast } from "sonner";
 import { API_BASE_URL } from "../config/env";
-import { Button } from "../components/ui/button";
 import ContactsFilterBar from "../components/contacts/ContactsFilterBar";
-import ContactsTable from "../components/contacts/ContactsTable";
+import ContactsErrorBanner from "../components/contacts/ContactsErrorBanner";
 import ContactDrawer from "../components/contacts/ContactDrawer";
-import ContactsPagination from "../components/contacts/ContactsPagination";
+import ContactsHubHeader from "../components/contacts/ContactsHubHeader";
+import ContactsTableSection from "../components/contacts/ContactsTableSection";
 import type {
   ContactFormState,
   ContactItem,
+  ContactsPaginationMeta,
   ContactsResponse,
   FormMode,
   TagItem,
@@ -69,7 +70,7 @@ async function extractErrorMessage(response: Response): Promise<string> {
 
 function ContactsHubPage() {
   const [searchParams, setSearchParams] = useSearchParams();
-
+  const navigate = useNavigate();
   /* ── Filter state ────────────────────────────────────────────── */
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -83,7 +84,7 @@ function ContactsHubPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [errorMessage, setErrorMessage] = useState("");
   const [refreshKey, setRefreshKey] = useState(0);
-  const [pagination, setPagination] = useState<ContactsResponse["pagination"]>({
+  const [pagination, setPagination] = useState<ContactsPaginationMeta>({
     page: 1,
     pageSize: DEFAULT_PAGE_SIZE,
     total: 0,
@@ -232,7 +233,11 @@ function ContactsHubPage() {
     setFormErrorMessage("");
     setFormSuccessMessage("");
     if (!formState.fullName.trim()) {
-      setFormErrorMessage("fullName is required");
+      const errorMessage = "fullName is required";
+      setFormErrorMessage(errorMessage);
+      toast.error(errorMessage, {
+        className: "border border-red-200 bg-red-50 text-red-900",
+      });
       return;
     }
     setIsSubmittingForm(true);
@@ -262,17 +267,24 @@ function ContactsHubPage() {
         body: JSON.stringify(body),
       });
       if (!res.ok) throw new Error(await extractErrorMessage(res));
-      handleStartCreate();
-      setFormSuccessMessage(
+      const successMessage =
         formMode === "create"
           ? "Contact created successfully."
-          : "Contact updated successfully.",
-      );
+          : "Contact updated successfully.";
+      toast.success(successMessage, {
+        className: "border border-emerald-200 bg-emerald-50 text-emerald-900",
+      });
+      navigate("/");
+      setIsDrawerOpen(false);
+      handleStartCreate();
       setRefreshKey((v) => v + 1);
     } catch (err) {
-      setFormErrorMessage(
-        (err as Error).message || "Failed to submit contact form",
-      );
+      const errorMessage =
+        (err as Error).message || "Failed to submit contact form";
+      setFormErrorMessage(errorMessage);
+      toast.error(errorMessage, {
+        className: "border border-red-200 bg-red-50 text-red-900",
+      });
     } finally {
       setIsSubmittingForm(false);
     }
@@ -357,27 +369,13 @@ function ContactsHubPage() {
   /* ── Render ──────────────────────────────────────────────────── */
   return (
     <div className="space-y-5">
-      {/* ── Top bar: title + count + add button ───────────────── */}
-      <div className="flex items-center justify-between">
-        {/* h1 (Sora text-3xl font-semibold) + count badge inline for authority */}
-        <div className="flex items-center gap-3">
-          <h1>Contacts</h1>
-          <span className="rounded-full bg-secondary px-3 py-0.5 text-sm font-semibold text-primary">
-            {pagination.total} contact{pagination.total !== 1 && "s"}
-          </span>
-        </div>
-        <Button
-          type="button"
-          onClick={() => {
-            handleStartCreate();
-            setIsDrawerOpen(true);
-          }}
-          className="flex items-center gap-1.5"
-        >
-          <Plus className="h-4 w-4" />
-          Add Contact
-        </Button>
-      </div>
+      <ContactsHubHeader
+        totalContacts={pagination.total}
+        onAddContact={() => {
+          handleStartCreate();
+          setIsDrawerOpen(true);
+        }}
+      />
 
       {/* ── Filter bar ────────────────────────────────────────── */}
       <ContactsFilterBar
@@ -410,32 +408,20 @@ function ContactsHubPage() {
         onClearFilters={handleClearFilters}
       />
 
-      {/* ── Error banner ──────────────────────────────────────── */}
-      {errorMessage && (
-        <div className="flex items-center gap-2 rounded-lg border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
-          <AlertCircle className="h-4 w-4 shrink-0" />
-          {errorMessage}
-        </div>
-      )}
+      <ContactsErrorBanner message={errorMessage} />
 
-      {/* ── Table ─────────────────────────────────────────────── */}
-      <div>
-        <ContactsTable
-          contacts={contacts}
-          isLoading={isLoading}
-          onToggleStar={handleToggleStar}
-          onEdit={(contact) => {
-            handleStartEdit(contact);
-            setIsDrawerOpen(true);
-          }}
-          onDelete={handleDeleteContact}
-        />
-        <ContactsPagination
-          pagination={pagination}
-          isLoading={isLoading}
-          onPageChange={setPage}
-        />
-      </div>
+      <ContactsTableSection
+        contacts={contacts}
+        isLoading={isLoading}
+        pagination={pagination}
+        onToggleStar={handleToggleStar}
+        onEdit={(contact) => {
+          handleStartEdit(contact);
+          setIsDrawerOpen(true);
+        }}
+        onDelete={handleDeleteContact}
+        onPageChange={setPage}
+      />
 
       {/* ── Add / Edit drawer ─────────────────────────────────── */}
       <ContactDrawer
@@ -448,7 +434,6 @@ function ContactsHubPage() {
         onClose={handleCloseDrawer}
         onSubmit={handleSubmitContactForm}
         onUpdateField={updateFormField}
-
       />
     </div>
   );
